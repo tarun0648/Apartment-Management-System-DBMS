@@ -84,13 +84,25 @@ app.post("/auth", (req, res) => {
 
 //register complaint
 app.post('/raisingcomplaint',function(req,res){
+    console.log('Received complaint:', req.body);
     const desc = req.body.descp;
     const blockno = req.body.blockno;
     const roomno = req.body.roomno;
-    const values = [desc,blockno,roomno];
-    const resul =db.registercomplaint(values,(err,result)=>{
-      if(err) console.log(err);
-    res.send(result);
+    const userId = req.body.userId;
+    const userType = req.body.userType;
+    const reportedBy = `${userType}-${userId}`;
+    
+    const values = [desc, reportedBy, blockno, roomno];
+    console.log('Processing complaint with values:', values);
+    
+    db.registercomplaint(values,(err,result)=>{
+      if(err) {
+        console.log('Error registering complaint:', err);
+        res.status(500).json({ error: err.message });
+      } else {
+        console.log('Complaint registered successfully:', result);
+        res.status(200).json({ message: 'Complaint registered successfully' });
+      }
     })
 });
 
@@ -219,17 +231,74 @@ app.post('/ownerroomdetails',(req,res)=>
 
 
 //books parking slot for tenents
+//create employee
+app.post('/createemployee', function(req, res) {
+  const name = req.body.name;
+  const age = req.body.age;
+  const empId = req.body.empId;
+  const salary = req.body.salary;
+  const empType = req.body.empType;
+  const blockNo = req.body.blockNo;
+  const password = req.body.password;
+  
+  const values = [empId, name, salary, empType, age, blockNo];
+  const vals = ["e-"+empId, password, empId];
+
+  const rest = db.createEmployee(values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.sendStatus(405);
+    } else {
+      const auth = db.createuserid(vals, (err, result) => {
+        if(err) {
+          console.log(err);
+          res.sendStatus(405);
+        } else {
+          res.sendStatus(200);
+        }
+      });
+    }
+  });
+});
+
 app.post('/bookslot',(req,res)=>
 {
-    const roomno =req.body.roomNo;
+    const roomno = req.body.roomNo;
     const slno = req.body.slotNo;
-    const values = [slno,roomno,];
-    const rest = db.bookslot(values,(err,result)=>{
-      if(err) console.log(err);
-      if(err) res.sendStatus(405);
-      else{
-        res.sendStatus(200);
-      }
+    
+    console.log('Received request to update parking slot:', { roomno, slno });
+
+    if (!roomno || roomno.trim() === '') {
+        return res.status(400).json({
+            success: false,
+            message: "Room number is required"
+        });
+    }
+
+    if (!slno || slno.trim() === '') {
+        return res.status(400).json({
+            success: false,
+            message: "Parking slot number is required"
+        });
+    }
+
+    const values = [slno.trim(), roomno.trim()];
+    console.log('Updating with values:', values);
+
+    db.bookslot(values, (err, result) => {
+        if(err) {
+            console.error("Error booking slot:", err);
+            return res.status(400).json({
+                success: false,
+                message: err.message || "Failed to update parking slot"
+            });
+        }
+        
+        console.log('Successfully updated parking slot');
+        res.json({
+            success: true,
+            message: `Successfully assigned parking slot ${slno} to room ${roomno}`
+        });
       
   })
 });
@@ -259,6 +328,123 @@ app.post('/paymaintanance',(req,res)=>
   })
 });
 //Other routes
+// Community Events endpoints
+app.post('/createevent', function(req, res) {
+  const { eventId, apartmentId, location, description, organizerId, eventName, eventDate } = req.body;
+  const values = [eventId, apartmentId, location, description, organizerId, eventName, eventDate];
+  
+  db.createEvent(values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.sendStatus(405);
+    } else {
+      res.sendStatus(200);
+    }
+  });
+});
+
+app.get('/events', function(req, res) {
+  db.getEvents((err, result) => {
+    if(err) {
+      console.log(err);
+      res.sendStatus(405);
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Amenities endpoints
+app.post('/createamenity', function(req, res) {
+  const { amenityId, amenityName, description, phoneNumber, email, rating } = req.body;
+  const values = [amenityId, amenityName, description, phoneNumber, email, rating];
+  
+  db.createAmenity(values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.sendStatus(405);
+    } else {
+      res.sendStatus(200);
+    }
+  });
+});
+
+app.get('/amenities', function(req, res) {
+  db.getAmenities((err, result) => {
+    if(err) {
+      console.log(err);
+      res.sendStatus(405);
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Service Providers endpoints
+app.post('/createserviceprovider', function(req, res) {
+  const { providerId, providerName, serviceType, contactPerson, phoneNumber, email } = req.body;
+  const values = [providerId, providerName, serviceType, contactPerson, phoneNumber, email];
+  
+  db.createServiceProvider(values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.sendStatus(405);
+    } else {
+      res.sendStatus(200);
+    }
+  });
+});
+
+app.get('/serviceproviders', function(req, res) {
+  db.getServiceProviders((err, result) => {
+    if(err) {
+      console.log(err);
+      res.sendStatus(405);
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get all blocks
+app.get('/blocks', (req, res) => {
+    db.getBlocks((err, results) => {
+        if (err) {
+            console.error('Error getting blocks:', err);
+            res.status(500).json({ error: 'Failed to fetch blocks' });
+            return;
+        }
+        res.json(results);
+    });
+});
+
+// Add new room to a block
+app.post('/addroom', (req, res) => {
+    const { blockNo, roomNo, type, floor, regNo, parkingSlot } = req.body;
+    
+    // Validate required fields
+    if (!blockNo || !roomNo || !type || !floor || !regNo) {
+        res.status(400).json({ error: 'Block number, room number, type, floor, and registration number are required' });
+        return;
+    }
+
+    // Validate floor number
+    if (floor < 0) {
+        res.status(400).json({ error: 'Floor number must be non-negative' });
+        return;
+    }
+
+    const values = [roomNo, type, floor, parkingSlot || null, regNo, blockNo];
+    db.addRoom(values, (err, result) => {
+        if (err) {
+            console.error('Error adding room:', err);
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        res.json({ message: 'Room added successfully' });
+    });
+});
+
 app.get('*', function(req, res){
   res.send('Sorry, this is an invalid URL.');
 });

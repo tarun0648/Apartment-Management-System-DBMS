@@ -1,30 +1,38 @@
 import axios from "axios";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 function RaisingComplaints() {
   const blockEl = useRef(null);
   const roomEl = useRef(null);
   const descpEl = useRef(null);
-  const tenantEl = useRef(null);
+  const userIdEl = useRef(null);
 
   const [blockno, setBlockno] = useState("");
   const [roomno, setRoomno] = useState("");
-  const [tenantId, setTenantId] = useState("");
+  const [userId, setUserId] = useState("");
   const [descp, setDescp] = useState("");
+  const [userType, setUserType] = useState("");
+
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem("whom"));
+    setUserType(userData.userType);
+    setUserId(userData.username);
+  }, []);
 
   const raiseComplaint = async () => {
     try {
       const res = await axios.post("http://localhost:5000/raisingcomplaint", {
         blockno: blockno,
         roomno: roomno,
-        tenantId: tenantId,
+        userId: userId,
+        userType: userType,
         descp: descp,
       });
       if (res.status === 200) {
         blockEl.current.value = "";
         roomEl.current.value = "";
         descpEl.current.value = "";
-        tenantEl.current.value = "";
+        // Success message or redirect could be added here
       }
     } catch (err) {
       console.log(err);
@@ -82,21 +90,19 @@ function RaisingComplaints() {
             </div>
             <div>
               <label
-                htmlFor="tenant-id"
+                htmlFor="user-id"
                 className="my-2 font-semibold text-gray-500 text-lx font-serif"
               >
-                Tenant Id:
+                User ID:
               </label>
               <input
-                ref={tenantEl}
+                ref={userIdEl}
                 type="text"
-                value={tenantId}
-                onChange={() => {
-                  setTenantId(tenantEl.current.value);
-                }}
-                placeholder="Tenant id"
-                id="tenant-no"
-                className="ml-5 outline-none py-1 my-3 px-2 text-md border-2 rounded-md"
+                value={userId}
+                disabled
+                placeholder="User ID"
+                id="user-id"
+                className="ml-5 outline-none py-1 my-3 px-2 text-md border-2 rounded-md bg-gray-100"
               />
             </div>
           </div>

@@ -27,16 +27,20 @@ function Dashboard(props) {
       }
       if (userType === "owner") {
         const forOwnerBox = [
-          { "No of Emloyees": 5 }
+          { "No of Emloyees": 5 },
+          { "Total complaints": 2 },
         ];
         forOwnerBox[0]["No of Emloyees"] = res.data.totalemployee;
+        forOwnerBox[1]["Total complaints"] = res.data.totalcomplaint;
         setForBox(forOwnerBox);
       }
       if (userType === "employee") {
         const forEmployeeBox = [
+          { "Total complaints": 31 },
           { Salary: "Rs. 20,0000" },
         ];
-        forEmployeeBox[0].Salary = "Rs. " + res.data.salary;
+        forEmployeeBox[0]["Total complaints"] = res.data.totalcomplaint;
+        forEmployeeBox[1].Salary = "Rs. " + res.data.salary;
         setForBox(forEmployeeBox);
       }
       if (userType === "tenant") {

@@ -8,7 +8,11 @@ import OwnerDetails from "./components/OwnerDetails";
 import TenantDetails from "./components/TenantDetails";
 import CreatingOwner from "./components/CreatingOwner";
 import CreatingParkingSlot from "./components/CreatingParkingSlot";
+import CreatingEmployee from "./components/CreatingEmployee";
 import ComplaintsViewer from "./components/ComplaintsViewer";
+import CommunityEvents from "./components/CommunityEvents";
+import Amenities from "./components/Amenities";
+import ServiceProviders from "./components/ServiceProviders";
 import RaisingComplaints from "./components/RaisingComplaints";
 import ParkingSlot from "./components/ParkingSlot";
 import PayMaintenance from "./components/PayMaintenance";
@@ -24,20 +28,36 @@ function App() {
     "Tenant Details",
     "Owner Details",
     "Create owner",
+    "Create employee",
     "Allotting Parking slot",
     "Complaints",
+    "Community Events",
+    "Amenities",
+    "Service Providers"
   ];
-  const forEmployee = ["Complaints"];
+  const forEmployee = [
+    "Complaints",
+    "Community Events",
+    "Amenities",
+    "Service Providers"
+  ];
   const forTenant = [
     "Raising Complaints",
     "Alloted Parking slot",
     "Pay maintenance",
+    "Community Events",
+    "Amenities",
+    "Service Providers"
   ];
   const forOwner = [
     "Tenant details",
-    "Complaint",
+    "View Complaints",
+    "Raise Complaint",
     "Create Tenant",
     "Room Details",
+    "Community Events",
+    "Amenities",
+    "Service Providers"
   ];
 
   return (
@@ -126,6 +146,17 @@ function App() {
           }
         />
         <Route
+          path="/admin/createemployee"
+          element={
+            <main>
+              <Header forHam={forAdmin} />
+              <section className="p-5">
+                <CreatingEmployee />
+              </section>
+            </main>
+          }
+        />
+        <Route
           path="/admin/allottingparkingslot"
           element={
             <main>
@@ -143,6 +174,39 @@ function App() {
               <Header forHam={forAdmin} />
               <section className="p-5">
                 <ComplaintsViewer />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/admin/communityevents"
+          element={
+            <main>
+              <Header forHam={forAdmin} />
+              <section className="p-5">
+                <CommunityEvents />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/admin/amenities"
+          element={
+            <main>
+              <Header forHam={forAdmin} />
+              <section className="p-5">
+                <Amenities />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/admin/serviceproviders"
+          element={
+            <main>
+              <Header forHam={forAdmin} />
+              <section className="p-5">
+                <ServiceProviders />
               </section>
             </main>
           }
@@ -192,12 +256,23 @@ function App() {
           }
         />
         <Route
-          path="/owner/complaint"
+          path="/owner/viewcomplaints"
           element={
             <main>
               <Header forHam={forOwner} />
               <section className="p-5">
                 <ComplaintsViewerOwner />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/owner/raisecomplaint"
+          element={
+            <main>
+              <Header forHam={forOwner} />
+              <section className="p-5">
+                <RaisingComplaints />
               </section>
             </main>
           }
@@ -231,6 +306,108 @@ function App() {
               <Header forHam={forEmployee} />
               <section className="p-5">
                 <ComplaintsViewer />
+              </section>
+            </main>
+          }
+        />
+        {/* Routes for Employee */}
+        <Route
+          path="/employee/communityevents"
+          element={
+            <main>
+              <Header forHam={forEmployee} />
+              <section className="p-5">
+                <CommunityEvents />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/employee/amenities"
+          element={
+            <main>
+              <Header forHam={forEmployee} />
+              <section className="p-5">
+                <Amenities />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/employee/serviceproviders"
+          element={
+            <main>
+              <Header forHam={forEmployee} />
+              <section className="p-5">
+                <ServiceProviders />
+              </section>
+            </main>
+          }
+        />
+        {/* Routes for Tenant */}
+        <Route
+          path="/tenant/communityevents"
+          element={
+            <main>
+              <Header forHam={forTenant} />
+              <section className="p-5">
+                <CommunityEvents />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/tenant/amenities"
+          element={
+            <main>
+              <Header forHam={forTenant} />
+              <section className="p-5">
+                <Amenities />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/tenant/serviceproviders"
+          element={
+            <main>
+              <Header forHam={forTenant} />
+              <section className="p-5">
+                <ServiceProviders />
+              </section>
+            </main>
+          }
+        />
+        {/* Routes for Owner */}
+        <Route
+          path="/owner/communityevents"
+          element={
+            <main>
+              <Header forHam={forOwner} />
+              <section className="p-5">
+                <CommunityEvents />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/owner/amenities"
+          element={
+            <main>
+              <Header forHam={forOwner} />
+              <section className="p-5">
+                <Amenities />
+              </section>
+            </main>
+          }
+        />
+        <Route
+          path="/owner/serviceproviders"
+          element={
+            <main>
+              <Header forHam={forOwner} />
+              <section className="p-5">
+                <ServiceProviders />
               </section>
             </main>
           }

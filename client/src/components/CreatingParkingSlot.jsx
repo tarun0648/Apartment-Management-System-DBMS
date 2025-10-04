@@ -7,18 +7,46 @@ function CreatingParkingSlot() {
   const [roomNo, setRoomno] = useState("");
   const [slotNo, setSlotNo] = useState("");
 
+  const [message, setMessage] = useState({ text: "", type: "" });
+
   const createSlot = async () => {
     try {
+      // Validate input
+      if (!roomNo || roomNo.trim() === '') {
+        setMessage({ text: "Please enter a room number", type: "error" });
+        return;
+      }
+      if (!slotNo || slotNo.trim() === '') {
+        setMessage({ text: "Please enter a parking slot number", type: "error" });
+        return;
+      }
+
+      setMessage({ text: "Updating parking slot...", type: "info" });
+      
+      // Log the data being sent
+      console.log("Sending data:", { roomNo, slotNo });
+      
       const res = await axios.post("http://localhost:5000/bookslot", {
-        roomNo: roomNo,
-        slotNo: slotNo,
+        roomNo: roomNo.trim(),
+        slotNo: slotNo.trim()
       });
-      if (res.status === 200) {
-        roomEl.current.value = "";
-        slotNoEl.current.value = "";
+      
+      // Handle success
+      if (res.data && res.data.success) {
+        setMessage({ text: res.data.message || "Parking slot updated successfully!", type: "success" });
+        // Clear the form
+        setRoomno("");
+        setSlotNo("");
+      } else {
+        throw new Error(res.data?.message || "Failed to update parking slot");
       }
     } catch (error) {
-      console.log(error);
+      console.error("Error updating parking slot:", error);
+      const errorMessage = error.response?.data?.message || error.message || "Failed to update parking slot";
+      setMessage({ 
+        text: errorMessage,
+        type: "error" 
+      });
     }
   };
 
@@ -48,8 +76,8 @@ function CreatingParkingSlot() {
                   type="text"
                   ref={roomEl}
                   value={roomNo}
-                  onChange={() => {
-                    setRoomno(roomEl.current.value);
+                  onChange={(e) => {
+                    setRoomno(e.target.value);
                   }}
                   name="Room no"
                   id="Room no"
@@ -70,8 +98,8 @@ function CreatingParkingSlot() {
                   type="text"
                   ref={slotNoEl}
                   value={slotNo}
-                  onChange={() => {
-                    setSlotNo(slotNoEl.current.value);
+                  onChange={(e) => {
+                    setSlotNo(e.target.value);
                   }}
                   name="pno"
                   id="pno"
@@ -89,10 +117,18 @@ function CreatingParkingSlot() {
                   Book slot
                 </button>
               </div>
-              <p
-                className="text-base text-center text-gray-400"
-                id="result"
-              ></p>
+              {message.text && (
+                <p
+                  className={`text-base text-center ${
+                    message.type === 'error' ? 'text-red-500' : 
+                    message.type === 'success' ? 'text-green-500' :
+                    'text-blue-500'
+                  }`}
+                  id="result"
+                >
+                  {message.text}
+                </p>
+              )}
             </form>
           </div>
         </div>

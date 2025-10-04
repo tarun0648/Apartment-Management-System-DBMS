@@ -8,7 +8,7 @@ function RoomDetails(props) {
     "Floor no",
     "Register no",
     "Block no",
-    "Parking Slot",
+    "Parking Details",
   ];
   const [roomRows, setRoomRows] = useState([]);
 
@@ -140,7 +140,7 @@ function RoomDetails(props) {
                         border-b border-l border-[#E8E8E8]
                         "
                         >
-                          {ele.parking_slot}
+                          {ele.parking_details}
                         </td>
                       </tr>
                     );
