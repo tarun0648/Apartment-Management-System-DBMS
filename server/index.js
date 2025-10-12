@@ -903,3 +903,519 @@ app.get('/maintenance/averagebytype', (req, res) => {
     }
   });
 });
+
+// ============= LEASE AGREEMENTS ROUTES =============
+
+// Create lease agreement
+app.post('/createlease', (req, res) => {
+  const { tenantId, ownerId, apartmentNo, startDate, endDate, monthlyRent, securityDeposit, leaseTerms } = req.body;
+  const values = [tenantId, ownerId, apartmentNo, startDate, endDate, monthlyRent, securityDeposit, leaseTerms];
+  
+  db.createLeaseAgreement(values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Lease agreement created successfully' });
+    }
+  });
+});
+
+// Get all lease agreements
+app.get('/leases', (req, res) => {
+  db.getAllLeaseAgreements((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get lease by tenant
+app.post('/lease/tenant', (req, res) => {
+  const tenantId = req.body.tenantId;
+  
+  db.getLeaseByTenant(tenantId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get lease by owner
+app.post('/lease/owner', (req, res) => {
+  const ownerId = req.body.ownerId;
+  
+  db.getLeaseByOwner(ownerId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get lease by apartment
+app.post('/lease/apartment', (req, res) => {
+  const apartmentNo = req.body.apartmentNo;
+  
+  db.getLeaseByApartment(apartmentNo, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Update lease agreement
+app.put('/updatelease/:id', (req, res) => {
+  const agreementId = req.params.id;
+  const { tenantId, ownerId, apartmentNo, startDate, endDate, monthlyRent, securityDeposit, leaseTerms, status } = req.body;
+  const values = [tenantId, ownerId, apartmentNo, startDate, endDate, monthlyRent, securityDeposit, leaseTerms, status];
+  
+  db.updateLeaseAgreement(agreementId, values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Lease agreement updated successfully' });
+    }
+  });
+});
+
+// Delete lease agreement
+app.delete('/deletelease/:id', (req, res) => {
+  const agreementId = req.params.id;
+  
+  db.deleteLeaseAgreement(agreementId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Lease agreement deleted successfully' });
+    }
+  });
+});
+
+// Terminate lease
+app.post('/terminatelease/:id', (req, res) => {
+  const agreementId = req.params.id;
+  
+  db.terminateLease(agreementId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Lease terminated successfully' });
+    }
+  });
+});
+
+// Get expiring leases (using stored procedure)
+app.post('/lease/expiring', (req, res) => {
+  const days = req.body.days || 30;
+  
+  db.getExpiringLeases(days, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get lease details (using stored procedure)
+app.post('/lease/details', (req, res) => {
+  const leaseId = req.body.leaseId;
+  
+  db.getLeaseDetails(leaseId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get total lease value (using function)
+app.post('/lease/totalvalue', (req, res) => {
+  const leaseId = req.body.leaseId;
+  
+  db.getTotalLeaseValue(leaseId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get active leases (using view)
+app.get('/lease/active', (req, res) => {
+  db.getActiveLeases((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// ============= VISITORS ROUTES =============
+
+// Register visitor (check-in)
+app.post('/registervisitor', (req, res) => {
+  const { visitorName, apartmentNo, ownerId, tenantId, entryTime, purpose, contactNumber, idProofType, idProofNumber } = req.body;
+  const values = [visitorName, apartmentNo, ownerId || null, tenantId || null, entryTime, purpose, contactNumber, idProofType, idProofNumber];
+  
+  db.registerVisitor(values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor registered successfully', visitorId: result.insertId });
+    }
+  });
+});
+
+// Checkout visitor (exit)
+app.post('/checkoutvisitor/:id', (req, res) => {
+  const visitorId = req.params.id;
+  
+  db.checkoutVisitor(visitorId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor checked out successfully' });
+    }
+  });
+});
+
+// Get all visitors
+app.get('/visitors', (req, res) => {
+  db.getAllVisitors((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get visitors by apartment
+app.post('/visitors/apartment', (req, res) => {
+  const apartmentNo = req.body.apartmentNo;
+  
+  db.getVisitorsByApartment(apartmentNo, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get current visitors (using stored procedure)
+app.get('/visitors/current', (req, res) => {
+  db.getCurrentVisitors((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get apartment visitor history (using stored procedure)
+app.post('/visitors/history', (req, res) => {
+  const { apartmentNo, days } = req.body;
+  
+  db.getApartmentVisitorHistory(apartmentNo, days || 30, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Update visitor
+app.put('/updatevisitor/:id', (req, res) => {
+  const visitorId = req.params.id;
+  const { visitorName, apartmentNo, purpose, contactNumber, idProofType, idProofNumber } = req.body;
+  const values = [visitorName, apartmentNo, purpose, contactNumber, idProofType, idProofNumber];
+  
+  db.updateVisitor(visitorId, values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor updated successfully' });
+    }
+  });
+});
+
+// Delete visitor
+app.delete('/deletevisitor/:id', (req, res) => {
+  const visitorId = req.params.id;
+  
+  db.deleteVisitor(visitorId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor deleted successfully' });
+    }
+  });
+});
+
+// Get apartment visitor count (using function)
+app.post('/visitors/count', (req, res) => {
+  const { apartmentNo, days } = req.body;
+  
+  db.getApartmentVisitorCount(apartmentNo, days || 30, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get visitor statistics (using view)
+app.get('/visitors/statistics', (req, res) => {
+  db.getVisitorStatistics((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// ============= VISITOR APPROVAL WORKFLOW ROUTES =============
+
+// Request visitor (Owner/Tenant creates request)
+app.post('/requestvisitor', (req, res) => {
+  const { visitorName, apartmentNo, ownerId, tenantId, requestedBy, requesterId, entryTime, purpose, contactNumber, idProofType, idProofNumber } = req.body;
+  const values = [visitorName, apartmentNo, ownerId || null, tenantId || null, requestedBy, requesterId, entryTime, purpose, contactNumber, idProofType, idProofNumber];
+  
+  db.requestVisitor(values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor request submitted successfully', visitorId: result.insertId });
+    }
+  });
+});
+
+// Get pending visitor requests (Admin only)
+app.get('/visitors/pending', (req, res) => {
+  db.getPendingVisitorRequests((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Approve visitor request (Admin only)
+app.post('/visitors/approve/:id', (req, res) => {
+  const visitorId = req.params.id;
+  const { adminId } = req.body;
+  
+  db.approveVisitorRequest(visitorId, adminId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor request approved successfully' });
+    }
+  });
+});
+
+// Reject visitor request (Admin only)
+app.post('/visitors/reject/:id', (req, res) => {
+  const visitorId = req.params.id;
+  const { adminId, rejectionReason } = req.body;
+  
+  db.rejectVisitorRequest(visitorId, adminId, rejectionReason, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor request rejected successfully' });
+    }
+  });
+});
+
+// Get approved visitors ready for check-in (Security/Admin)
+app.get('/visitors/approved', (req, res) => {
+  db.getApprovedVisitors((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Check-in visitor (Security/Admin - marks as 'Inside')
+app.post('/visitors/checkin/:id', (req, res) => {
+  const visitorId = req.params.id;
+  
+  db.checkinVisitor(visitorId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor checked in successfully' });
+    }
+  });
+});
+
+// Checkout visitor (Security/Admin/Employee)
+app.post('/visitors/checkout/:id', (req, res) => {
+  const visitorId = req.params.id;
+  
+  db.checkoutVisitor(visitorId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor checked out successfully' });
+    }
+  });
+});
+
+// Get current visitors inside
+app.get('/visitors/inside', (req, res) => {
+  db.getCurrentVisitorsInside((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get my visitor requests (Owner/Tenant view)
+app.post('/visitors/myrequests', (req, res) => {
+  const { userType, userId } = req.body;
+  
+  db.getMyVisitorRequests(userType, userId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get all visitors (Admin view)
+app.get('/visitors/all', (req, res) => {
+  db.getAllVisitors((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get visitors by apartment
+app.post('/visitors/byapartment', (req, res) => {
+  const { apartmentNo } = req.body;
+  
+  db.getVisitorsByApartment(apartmentNo, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Update visitor request (only before approval)
+app.put('/visitors/updaterequest/:id', (req, res) => {
+  const visitorId = req.params.id;
+  const { visitorName, apartmentNo, purpose, contactNumber, idProofType, idProofNumber, entryTime } = req.body;
+  const values = [visitorName, apartmentNo, purpose, contactNumber, idProofType, idProofNumber, entryTime];
+  
+  db.updateVisitorRequest(visitorId, values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor request updated successfully' });
+    }
+  });
+});
+
+// Delete visitor request (only if pending)
+app.delete('/visitors/deleterequest/:id', (req, res) => {
+  const visitorId = req.params.id;
+  
+  db.deleteVisitorRequest(visitorId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor request deleted successfully' });
+    }
+  });
+});
+
+// Cancel visitor request (by requester)
+app.post('/visitors/cancel/:id', (req, res) => {
+  const visitorId = req.params.id;
+  const { requesterId } = req.body;
+  
+  db.cancelVisitorRequest(visitorId, requesterId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Visitor request cancelled successfully' });
+    }
+  });
+});
+
+// Get visitor approval statistics
+app.get('/visitors/stats', (req, res) => {
+  db.getVisitorApprovalStats((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result[0]);
+    }
+  });
+});

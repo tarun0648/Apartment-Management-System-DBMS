@@ -23,54 +23,67 @@ import ComplaintsViewerOwner from "./components/ComplaintsViewerOwner";
 import RoomDetailsOwner from "./components/RoomDetailsOwner";
 import Maintenance from "./components/Maintenance";
 import Feedback from "./components/Feedback";
+import LeaseAgreements from "./components/LeaseAgreements";
+import Visitors from "./components/Visitors";
+
 
 function App() {
   // Sidebar configurations
-  const forAdmin = [
-    "Tenant Details",
-    "Owner Details",
-    "Create owner",
-    "Create employee",
-    "Allotting Parking slot",
-    "Complaints",
-    "Maintenance",
-    "Feedback",
-    "Community Events",
-    "Amenities",
-    "Service Providers"
-  ];
-  
-  const forEmployee = [
-    "Complaints",
-    "Maintenance",
-    "Community Events",
-    "Amenities",
-    "Service Providers"
-  ];
-  
-  const forTenant = [
-    "Raising Complaints",
-    "Alloted Parking slot",
-    "Pay maintenance",
-    "Maintenance",
-    "Feedback",
-    "Community Events",
-    "Amenities",
-    "Service Providers"
-  ];
-  
-  const forOwner = [
-    "Tenant details",
-    "View Complaints",
-    "Raise Complaint",
-    "Create Tenant",
-    "Room Details",
-    "Maintenance",
-    "Feedback",
-    "Community Events",
-    "Amenities",
-    "Service Providers"
-  ];
+const forAdmin = [
+  "Tenant Details",
+  "Owner Details",
+  "Create owner",
+  "Create employee",
+  "Allotting Parking slot",
+  "Complaints",
+  "Maintenance",
+  "Feedback",
+  "Community Events",
+  "Amenities",
+  "Service Providers",
+  "Lease Agreements",
+  "Visitors"
+];
+
+// Employee sidebar (already has Visitors)
+const forEmployee = [
+  "Complaints",
+  "Maintenance",
+  "Community Events",
+  "Amenities",
+  "Service Providers",
+  "Visitors"
+];
+
+// Tenant sidebar - ADD "Visitors" HERE
+const forTenant = [
+  "Raising Complaints",
+  "Alloted Parking slot",
+  "Pay maintenance",
+  "Maintenance",
+  "Feedback",
+  "Community Events",
+  "Amenities",
+  "Service Providers",
+  "Lease Agreements",
+  "Visitors"  // ← ADD THIS LINE
+];
+
+// Owner sidebar - ADD "Visitors" HERE
+const forOwner = [
+  "Tenant details",
+  "View Complaints",
+  "Raise Complaint",
+  "Create Tenant",
+  "Room Details",
+  "Maintenance",
+  "Feedback",
+  "Community Events",
+  "Amenities",
+  "Service Providers",
+  "Lease Agreements",
+  "Visitors"  // ← ADD THIS LINE
+];
 
   return (
     <div className="App font-mons bg-white">
@@ -516,6 +529,367 @@ function App() {
             </main>
           }
         />
+        <Route
+  path="/admin/leaseagreements"
+  element={
+    <main>
+      <Header forHam={forAdmin} />
+      <section className="p-5">
+        <LeaseAgreements />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/admin/visitors"
+  element={
+    <main>
+      <Header forHam={forAdmin} />
+      <section className="p-5">
+        <Visitors />
+      </section>
+    </main>
+  }
+/>
+
+// ============= EMPLOYEE ROUTES - ADD THIS =============
+<Route
+  path="/employee/visitors"
+  element={
+    <main>
+      <Header forHam={forEmployee} />
+      <section className="p-5">
+        <Visitors />
+      </section>
+    </main>
+  }
+/>
+
+// ============= TENANT ROUTES - ADD THIS =============
+<Route
+  path="/tenant/leaseagreements"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <LeaseAgreements />
+      </section>
+    </main>
+  }
+/>
+
+// ============= OWNER ROUTES - ADD THIS =============
+<Route
+  path="/owner/leaseagreements"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <LeaseAgreements />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/visitors"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <Visitors />
+      </section>
+    </main>
+  }
+/>
+
+// OWNER ROUTES - Add this route
+<Route
+  path="/owner/visitors"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <Visitors />
+      </section>
+    </main>
+  }
+/>
+
+// ============================================
+// COMPLETE TENANT ROUTES SECTION
+// ============================================
+{/* Tenant Routes */}
+<Route
+  path="/tenant"
+  element={
+    <main>
+      <Header forHam={[...forTenant, "Logout"]} />
+      <section className="flex">
+        <Aside forHam={forTenant} />
+        <Dashboard />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/raisingcomplaints"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <RaisingComplaints />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/allotedparkingslot"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <ParkingSlot />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/paymaintenance"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <PayMaintenance />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/maintenance"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <Maintenance />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/feedback"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <Feedback />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/communityevents"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <CommunityEvents />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/amenities"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <Amenities />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/serviceproviders"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <ServiceProviders />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/leaseagreements"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <LeaseAgreements />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/tenant/visitors"
+  element={
+    <main>
+      <Header forHam={forTenant} />
+      <section className="p-5">
+        <Visitors />
+      </section>
+    </main>
+  }
+/>
+
+// ============================================
+// COMPLETE OWNER ROUTES SECTION
+// ============================================
+{/* Owner Routes */}
+<Route
+  path="/owner"
+  element={
+    <main>
+      <Header forHam={[...forOwner, "Logout"]} />
+      <section className="flex">
+        <Aside forHam={forOwner} />
+        <Dashboard />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/tenantdetails"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <TenantDetails />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/viewcomplaints"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <ComplaintsViewerOwner />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/raisecomplaint"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <RaisingComplaints />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/createtenant"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <CreatingTenant />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/roomdetails"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <RoomDetails />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/maintenance"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <Maintenance />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/feedback"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <Feedback />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/communityevents"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <CommunityEvents />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/amenities"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <Amenities />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/serviceproviders"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <ServiceProviders />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/leaseagreements"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <LeaseAgreements />
+      </section>
+    </main>
+  }
+/>
+<Route
+  path="/owner/visitors"
+  element={
+    <main>
+      <Header forHam={forOwner} />
+      <section className="p-5">
+        <Visitors />
+      </section>
+    </main>
+  }
+/>
       </Routes>
     </div>
   );

@@ -313,3 +313,230 @@ INSERT INTO visitors (visitor_name, apartment_no, owner_id, entry_time, exit_tim
 -- ================================================
 SELECT '✅ Lease Agreements & Visitors Tables Created Successfully!' AS Status;
 SELECT 'Tables: 2, Triggers: 2, Procedures: 4, Functions: 2, Views: 2' AS Summary;
+
+
+
+
+-- ================================================
+-- VISITORS WITH APPROVAL WORKFLOW - DATABASE SCHEMA
+-- ================================================
+
+USE apartment_management;
+
+-- Drop existing visitors table
+DROP TABLE IF EXISTS visitors;
+
+-- ================================================
+-- TABLE: VISITORS (WITH APPROVAL WORKFLOW)
+-- ================================================
+CREATE TABLE visitors (
+  visitor_id INT NOT NULL AUTO_INCREMENT,
+  visitor_name VARCHAR(100) NOT NULL,
+  apartment_no INT NOT NULL,
+  owner_id INT DEFAULT NULL,
+  tenant_id INT DEFAULT NULL,
+  requested_by VARCHAR(20) NOT NULL, -- 'owner' or 'tenant'
+  requester_id INT NOT NULL, -- ID of person who requested
+  entry_time DATETIME NOT NULL,
+  exit_time DATETIME DEFAULT NULL,
+  purpose VARCHAR(200) DEFAULT NULL,
+  contact_number VARCHAR(15) DEFAULT NULL,
+  id_proof_type VARCHAR(50) DEFAULT NULL,
+  id_proof_number VARCHAR(50) DEFAULT NULL,
+  approval_status VARCHAR(20) DEFAULT 'Pending', -- Pending, Approved, Rejected
+  approved_by INT DEFAULT NULL, -- Admin who approved
+  approved_at DATETIME DEFAULT NULL,
+  rejection_reason VARCHAR(500) DEFAULT NULL,
+  visitor_status VARCHAR(20) DEFAULT 'Requested', -- Requested, Approved, Inside, Exited, Rejected
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (visitor_id),
+  KEY idx_visitor_apartment (apartment_no),
+  KEY idx_visitor_owner (owner_id),
+  KEY idx_visitor_tenant (tenant_id),
+  KEY idx_visitor_entry (entry_time),
+  KEY idx_visitor_approval_status (approval_status),
+  KEY idx_visitor_status (visitor_status),
+  CONSTRAINT fk_visitor_apartment FOREIGN KEY (apartment_no) REFERENCES room (room_no) ON DELETE CASCADE,
+  CONSTRAINT fk_visitor_owner FOREIGN KEY (owner_id) REFERENCES owner (owner_id) ON DELETE SET NULL,
+  CONSTRAINT fk_visitor_tenant FOREIGN KEY (tenant_id) REFERENCES tenant (tenant_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ================================================
+-- TRIGGERS FOR VISITOR APPROVAL
+-- ================================================
+
+-- Trigger to update visitor_status when approved
+DELIMITER //
+CREATE TRIGGER after_visitor_approval
+AFTER UPDATE ON visitors
+FOR EACH ROW
+BEGIN
+    IF NEW.approval_status = 'Approved' AND OLD.approval_status != 'Approved' THEN
+        -- Update visitor_status to 'Approved'
+        UPDATE visitors 
+        SET visitor_status = 'Approved'
+        WHERE visitor_id = NEW.visitor_id;
+    END IF;
+    
+    IF NEW.approval_status = 'Rejected' AND OLD.approval_status != 'Rejected' THEN
+        -- Update visitor_status to 'Rejected'
+        UPDATE visitors 
+        SET visitor_status = 'Rejected'
+        WHERE visitor_id = NEW.visitor_id;
+    END IF;
+END //
+DELIMITER ;
+
+-- ================================================
+-- STORED PROCEDURES FOR VISITOR APPROVAL
+-- ================================================
+
+-- Procedure to get pending visitor requests
+DELIMITER //
+CREATE PROCEDURE GetPendingVisitorRequests()
+BEGIN
+    SELECT 
+        v.*,
+        r.type as room_type,
+        r.floor,
+        b.block_name,
+        CASE 
+            WHEN v.requested_by = 'owner' THEN o.name
+            WHEN v.requested_by = 'tenant' THEN t.name
+            ELSE 'Unknown'
+        END as requester_name,
+        TIMESTAMPDIFF(HOUR, v.created_at, NOW()) as hours_pending
+    FROM visitors v
+    INNER JOIN room r ON v.apartment_no = r.room_no
+    INNER JOIN block b ON r.block_no = b.block_no
+    LEFT JOIN owner o ON v.requester_id = o.owner_id AND v.requested_by = 'owner'
+    LEFT JOIN tenant t ON v.requester_id = t.tenant_id AND v.requested_by = 'tenant'
+    WHERE v.approval_status = 'Pending'
+    ORDER BY v.created_at ASC;
+END //
+DELIMITER ;
+
+-- Procedure to get approved visitors ready for entry
+DELIMITER //
+CREATE PROCEDURE GetApprovedVisitors()
+BEGIN
+    SELECT 
+        v.*,
+        r.type as room_type,
+        r.floor,
+        b.block_name,
+        CASE 
+            WHEN v.requested_by = 'owner' THEN o.name
+            WHEN v.requested_by = 'tenant' THEN t.name
+            ELSE 'Unknown'
+        END as requester_name
+    FROM visitors v
+    INNER JOIN room r ON v.apartment_no = r.room_no
+    INNER JOIN block b ON r.block_no = b.block_no
+    LEFT JOIN owner o ON v.requester_id = o.owner_id AND v.requested_by = 'owner'
+    LEFT JOIN tenant t ON v.requester_id = t.tenant_id AND v.requested_by = 'tenant'
+    WHERE v.approval_status = 'Approved' 
+    AND v.visitor_status = 'Approved'
+    ORDER BY v.entry_time ASC;
+END //
+DELIMITER ;
+
+-- Procedure to get current visitors (already inside)
+DELIMITER //
+CREATE PROCEDURE GetCurrentVisitorsInside()
+BEGIN
+    SELECT 
+        v.*,
+        r.type as room_type,
+        r.floor,
+        b.block_name,
+        CASE 
+            WHEN v.requested_by = 'owner' THEN o.name
+            WHEN v.requested_by = 'tenant' THEN t.name
+            ELSE 'Unknown'
+        END as requester_name,
+        TIMESTAMPDIFF(MINUTE, v.entry_time, NOW()) as minutes_inside
+    FROM visitors v
+    INNER JOIN room r ON v.apartment_no = r.room_no
+    INNER JOIN block b ON r.block_no = b.block_no
+    LEFT JOIN owner o ON v.requester_id = o.owner_id AND v.requested_by = 'owner'
+    LEFT JOIN tenant t ON v.requester_id = t.tenant_id AND v.requested_by = 'tenant'
+    WHERE v.visitor_status = 'Inside'
+    ORDER BY v.entry_time DESC;
+END //
+DELIMITER ;
+
+-- Procedure to get visitor requests by user
+DELIMITER //
+CREATE PROCEDURE GetMyVisitorRequests(
+    IN user_type_param VARCHAR(20),
+    IN user_id_param INT
+)
+BEGIN
+    SELECT 
+        v.*,
+        r.type as room_type,
+        r.floor,
+        b.block_name,
+        CASE 
+            WHEN v.approved_by IS NOT NULL THEN 
+                (SELECT admin_name FROM block_admin WHERE admin_id = v.approved_by)
+            ELSE NULL
+        END as approved_by_name
+    FROM visitors v
+    INNER JOIN room r ON v.apartment_no = r.room_no
+    INNER JOIN block b ON r.block_no = b.block_no
+    WHERE v.requested_by = user_type_param 
+    AND v.requester_id = user_id_param
+    ORDER BY v.created_at DESC;
+END //
+DELIMITER ;
+
+-- ================================================
+-- VIEWS FOR VISITOR MANAGEMENT
+-- ================================================
+
+-- View for visitor approval statistics
+CREATE OR REPLACE VIEW visitor_approval_stats AS
+SELECT 
+    COUNT(*) as total_requests,
+    SUM(CASE WHEN approval_status = 'Pending' THEN 1 ELSE 0 END) as pending_count,
+    SUM(CASE WHEN approval_status = 'Approved' THEN 1 ELSE 0 END) as approved_count,
+    SUM(CASE WHEN approval_status = 'Rejected' THEN 1 ELSE 0 END) as rejected_count,
+    SUM(CASE WHEN visitor_status = 'Inside' THEN 1 ELSE 0 END) as currently_inside,
+    AVG(TIMESTAMPDIFF(HOUR, created_at, approved_at)) as avg_approval_time_hours
+FROM visitors;
+
+-- ================================================
+-- SAMPLE DATA
+-- ================================================
+
+-- Clear existing data
+DELETE FROM visitors;
+
+-- Insert sample visitor requests
+INSERT INTO visitors (visitor_name, apartment_no, owner_id, tenant_id, requested_by, requester_id, entry_time, purpose, contact_number, id_proof_type, id_proof_number, approval_status, visitor_status) VALUES
+-- Pending requests
+('Ramesh Kumar', 101, 401, NULL, 'owner', 401, '2025-10-13 14:00:00', 'Family Visit', '9876543210', 'Aadhar', 'XXXX-XXXX-1234', 'Pending', 'Requested'),
+('Suresh Sharma', 102, NULL, 301, 'tenant', 301, '2025-10-13 16:00:00', 'Friend Visit', '9876543211', 'DL', 'DL-0720231234', 'Pending', 'Requested'),
+-- Approved requests
+('Priya Singh', 201, 402, NULL, 'owner', 402, '2025-10-13 10:00:00', 'Delivery', '9876543212', 'Aadhar', 'XXXX-XXXX-5678', 'Approved', 'Approved'),
+-- Already inside
+('Amit Patel', 102, NULL, 301, 'tenant', 301, '2025-10-12 18:00:00', 'Family Visit', '9876543213', 'Passport', 'P1234567', 'Approved', 'Inside'),
+-- Rejected
+('Unknown Person', 101, 401, NULL, 'owner', 401, '2025-10-11 20:00:00', 'No proper reason', '9876543214', 'None', 'None', 'Rejected', 'Rejected');
+
+-- Update approved visitors with approval details
+UPDATE visitors 
+SET approved_by = 101, approved_at = '2025-10-13 10:30:00' 
+WHERE approval_status = 'Approved';
+
+UPDATE visitors 
+SET approved_by = 101, approved_at = '2025-10-11 20:30:00', rejection_reason = 'Insufficient information provided'
+WHERE approval_status = 'Rejected';
+
+-- ================================================
+-- SUCCESS MESSAGE
+-- ================================================
+SELECT '✅ Visitors Table with Approval Workflow Created Successfully!' AS Status;
+SELECT 'Workflow: Tenant/Owner Request → Admin Approve → Security Check-in → Check-out' AS Flow;
