@@ -92,7 +92,7 @@ function Auth(props) {
           <div className="max-w-md mx-auto my-10">
             <div className="text-center">
               <h1 className="my-3 text-3xl font-semibold text-gray-700 ">
-                Jasmine Towers
+                APPARTMENT MANAGEMENT SYSTEM
               </h1>
             </div>
             <div className="m-7">

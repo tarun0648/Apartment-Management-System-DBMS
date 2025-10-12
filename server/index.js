@@ -687,3 +687,219 @@ app.post('/createemployee', function(req, res) {
     else res.sendStatus(200);
   });
 });
+
+// ADD THESE ROUTES TO YOUR server/index.js file
+
+// ============= STORED PROCEDURE ROUTES =============
+
+// Get complete user profile using stored procedure
+app.post('/userprofile/complete', (req, res) => {
+  const userId = req.body.userId;
+  
+  db.getUserCompleteProfile(userId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get maintenance summary using stored procedure
+app.post('/maintenance/summary', (req, res) => {
+  const month = req.body.month;
+  
+  db.getMaintenanceSummary(month, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get block statistics using stored procedure
+app.post('/block/statistics', (req, res) => {
+  const blockNo = req.body.blockNo;
+  
+  db.getBlockStatistics(blockNo, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Generate monthly maintenance using stored procedure
+app.post('/maintenance/generate', (req, res) => {
+  const { month, baseAmount, dueDay } = req.body;
+  
+  db.generateMonthlyMaintenance(month, baseAmount, dueDay, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get top rated services using stored procedure
+app.get('/services/toprated', (req, res) => {
+  db.getTopRatedServices((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// ============= USER-DEFINED FUNCTION ROUTES =============
+
+// Get user's pending maintenance amount using function
+app.post('/user/pendingmaintenance', (req, res) => {
+  const userId = req.body.userId;
+  
+  db.getUserPendingMaintenance(userId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get user's complaint count using function
+app.post('/user/complaintcount', (req, res) => {
+  const userId = req.body.userId;
+  
+  db.getUserComplaintCount(userId, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get block occupancy rate using function
+app.post('/block/occupancy', (req, res) => {
+  const blockNo = req.body.blockNo;
+  
+  db.getBlockOccupancyRate(blockNo, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// ============= COMPLEX VIEW ROUTES =============
+
+// Get room complete details from view
+app.get('/room/completedetails', (req, res) => {
+  db.getRoomCompleteDetails((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get maintenance dashboard from view
+app.get('/maintenance/dashboard', (req, res) => {
+  db.getMaintenanceDashboard((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get user activity summary from view
+app.get('/user/activitysummary', (req, res) => {
+  db.getUserActivitySummary((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// ============= ADVANCED AGGREGATE QUERIES =============
+
+// Get complaint statistics by block with aggregation
+app.get('/complaints/statistics', (req, res) => {
+  db.getComplaintStatistics((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get maintenance collection report with aggregation
+app.get('/maintenance/collectionreport', (req, res) => {
+  db.getMaintenanceCollectionReport((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get feedback statistics with aggregation
+app.get('/feedback/statistics', (req, res) => {
+  db.getFeedbackStatistics((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get room occupancy by block with aggregation
+app.get('/room/occupancybyblock', (req, res) => {
+  db.getRoomOccupancyByBlock((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Get average maintenance by room type with aggregation
+app.get('/maintenance/averagebytype', (req, res) => {
+  db.getAverageMaintenanceByRoomType((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});

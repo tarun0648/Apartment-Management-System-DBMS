@@ -27,7 +27,8 @@ CREATE TABLE service_providers (
     service_type VARCHAR(50),
     contact_person VARCHAR(100),
     phone_number VARCHAR(15),
-    email VARCHAR(100)
+    email VARCHAR(100),
+    rating DECIMAL(3,2) DEFAULT NULL
 );
 
 -- Create the complaints table with matching data types from block table

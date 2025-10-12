@@ -5,7 +5,8 @@ const con = mysql.createConnection({
     host: config.host,
     user: config.uname,
     password: config.upass,
-    database: config.database
+    database: config.database,
+    multipleStatements: true  // Enable multiple statements for procedures
 });
 
 // ============= CONNECTION =============
@@ -168,21 +169,52 @@ function deleteComplaint(complaintId, callback) {
 
 // ============= OWNER FUNCTIONS =============
 function createowner(values, callback) {
-    const sql = 'insert into owner values(?,?,?,?,?,?)';
-    con.query(sql, values, (err, results) => {
-        callback(err, results);
-    })
+    // Check if room exists and is not already occupied
+    const roomNo = values[4]; // room_no is at index 4
+    
+    const checkRoomSql = 'SELECT * FROM room WHERE room_no = ?';
+    con.query(checkRoomSql, [roomNo], (err, roomResults) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+
+        if (roomResults.length === 0) {
+            callback(new Error(`Room number ${roomNo} does not exist`), null);
+            return;
+        }
+
+        // Check if room already has an owner
+        const checkOwnerSql = 'SELECT * FROM owner WHERE room_no = ?';
+        con.query(checkOwnerSql, [roomNo], (err, ownerResults) => {
+            if (err) {
+                callback(err, null);
+                return;
+            }
+
+            if (ownerResults.length > 0) {
+                callback(new Error(`Room ${roomNo} already has an owner`), null);
+                return;
+            }
+
+            // Insert owner (trigger will auto-create auth entry)
+            const sql = 'INSERT INTO owner VALUES(?,?,?,?,?,?)';
+            con.query(sql, values, (err, results) => {
+                callback(err, results);
+            });
+        });
+    });
 }
 
 function createownerproof(values, callback) {
-    const sql = 'insert into identity values(?,?,null)';
+    const sql = 'INSERT INTO identity VALUES(?,?,null)';
     con.query(sql, values, (err, results) => {
         callback(err, results);
     })
 }
 
 function totalowner(callback) {
-    const sql = 'SELECT COUNT(owner_id) FROM owner';
+    const sql = 'SELECT COUNT(owner_id) as count FROM owner';
     con.query(sql, (err, results) => {
         callback(err, results);
     })
@@ -211,7 +243,7 @@ function ownerroomdetails(values, callback) {
 }
 
 function ownertenantdetails(values, callback) {
-    const sql = 'select * from tenant where room_no in (select room_no from owner where owner_id in(select id from auth where user_id=?))';
+    const sql = 'SELECT * FROM tenant WHERE room_no IN (SELECT room_no FROM owner WHERE owner_id IN(SELECT id FROM auth WHERE user_id=?))';
     con.query(sql, values, (err, results) => {
         callback(err, results);
     })
@@ -223,41 +255,68 @@ function updateOwner(ownerId, values, callback) {
 }
 
 function deleteOwner(ownerId, callback) {
-    const sql = "DELETE FROM owner WHERE owner_id = ?";
-    con.query(sql, [ownerId], callback);
+    // First delete from auth table
+    const deleteAuthSql = "DELETE FROM auth WHERE user_id = ?";
+    con.query(deleteAuthSql, [`o-${ownerId}`], (err) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        
+        // Then delete from owner table
+        const sql = "DELETE FROM owner WHERE owner_id = ?";
+        con.query(sql, [ownerId], callback);
+    });
 }
 
 // ============= TENANT FUNCTIONS =============
 function createtenant(values, callback) {
-    const sql = 'insert into tenant values(?,?,?,null,?,?)';
-    con.query(sql, values, (err, results) => {
-        callback(err, results);
-    })
+    // Check if room exists
+    const roomNo = values[4]; // room_no is at index 4
+    
+    const checkRoomSql = 'SELECT * FROM room WHERE room_no = ?';
+    con.query(checkRoomSql, [roomNo], (err, roomResults) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+
+        if (roomResults.length === 0) {
+            callback(new Error(`Room number ${roomNo} does not exist`), null);
+            return;
+        }
+
+        // Insert tenant (trigger will auto-create auth entry)
+        const sql = 'INSERT INTO tenant VALUES(?,?,?,null,?,?)';
+        con.query(sql, values, (err, results) => {
+            callback(err, results);
+        });
+    });
 }
 
 function createtenantproof(values, callback) {
-    const sql = 'insert into identity values(?,null,?)';
+    const sql = 'INSERT INTO identity VALUES(?,null,?)';
     con.query(sql, values, (err, results) => {
         callback(err, results);
     })
 }
 
 function totaltenant(callback) {
-    const sql = 'SELECT COUNT(tenant_id) FROM tenant';
+    const sql = 'SELECT COUNT(tenant_id) as count FROM tenant';
     con.query(sql, (err, results) => {
         callback(err, results);
     })
 }
 
 function gettenantdata(tid, callback) {
-    const sql = 'select * from tenant where tenant_id in (select id from auth where user_id=?)';
+    const sql = 'SELECT * FROM tenant WHERE tenant_id IN (SELECT id FROM auth WHERE user_id=?)';
     con.query(sql, tid, (err, results) => {
         callback(err, results);
     })
 }
 
 function paymaintanence(id, callback) {
-    const sql = 'update tenant set stat="paid" where tenant_id in (select id from auth where user_id=?)';
+    const sql = 'UPDATE tenant SET stat="paid" WHERE tenant_id IN (SELECT id FROM auth WHERE user_id=?)';
     con.query(sql, id, (err, results) => {
         callback(err, results);
     })
@@ -269,27 +328,54 @@ function updateTenant(tenantId, values, callback) {
 }
 
 function deleteTenant(tenantId, callback) {
-    const sql = "DELETE FROM tenant WHERE tenant_id = ?";
-    con.query(sql, [tenantId], callback);
+    // First delete from auth table
+    const deleteAuthSql = "DELETE FROM auth WHERE user_id = ?";
+    con.query(deleteAuthSql, [`t-${tenantId}`], (err) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        
+        // Then delete from tenant table
+        const sql = "DELETE FROM tenant WHERE tenant_id = ?";
+        con.query(sql, [tenantId], callback);
+    });
 }
 
 // ============= EMPLOYEE FUNCTIONS =============
 function createEmployee(values, callback) {
-    const sql = 'insert into employee values(?,?,?,?,?,?)';
-    con.query(sql, values, (err, results) => {
-        callback(err, results);
+    // Check if block exists
+    const blockNo = values[5]; // block_no is at index 5
+    
+    const checkBlockSql = 'SELECT * FROM block WHERE block_no = ?';
+    con.query(checkBlockSql, [blockNo], (err, blockResults) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+
+        if (blockResults.length === 0) {
+            callback(new Error(`Block number ${blockNo} does not exist`), null);
+            return;
+        }
+
+        // Insert employee (trigger will auto-create auth entry)
+        const sql = 'INSERT INTO employee VALUES(?,?,?,?,?,?)';
+        con.query(sql, values, (err, results) => {
+            callback(err, results);
+        });
     });
 }
 
 function totalemployee(callback) {
-    const sql = 'SELECT COUNT(emp_id) FROM employee';
+    const sql = 'SELECT COUNT(emp_id) as count FROM employee';
     con.query(sql, (err, results) => {
         callback(err, results);
     })
 }
 
 function empsalary(id, callback) {
-    const sql = 'select salary from employee where emp_id in (select id from auth where user_id=?)';
+    const sql = 'SELECT salary FROM employee WHERE emp_id IN (SELECT id FROM auth WHERE user_id=?)';
     con.query(sql, id, (err, results) => {
         callback(err, results);
     })
@@ -301,8 +387,18 @@ function updateEmployee(empId, values, callback) {
 }
 
 function deleteEmployee(empId, callback) {
-    const sql = "DELETE FROM employee WHERE emp_id = ?";
-    con.query(sql, [empId], callback);
+    // First delete from auth table
+    const deleteAuthSql = "DELETE FROM auth WHERE user_id = ?";
+    con.query(deleteAuthSql, [`e-${empId}`], (err) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        
+        // Then delete from employee table
+        const sql = "DELETE FROM employee WHERE emp_id = ?";
+        con.query(sql, [empId], callback);
+    });
 }
 
 // ============= PARKING & ROOM FUNCTIONS =============
@@ -376,29 +472,58 @@ function getBlocks(callback) {
 function addRoom(values, callback) {
     const [roomNo, type, floor, parkingSlot, regNo, blockNo] = values;
     
-    const checkSql = 'SELECT * FROM room WHERE room_no = ?';
-    con.query(checkSql, [roomNo], (err, results) => {
+    // Check if block exists
+    const checkBlockSql = 'SELECT * FROM block WHERE block_no = ?';
+    con.query(checkBlockSql, [blockNo], (err, blockResults) => {
         if (err) {
-            console.error('Error checking room:', err);
+            console.error('Error checking block:', err);
             callback(err, null);
             return;
         }
 
-        if (results.length > 0) {
-            callback(new Error('Room number already exists'), null);
+        if (blockResults.length === 0) {
+            callback(new Error(`Block number ${blockNo} does not exist`), null);
             return;
         }
 
-        const insertSql = 'INSERT INTO room (room_no, type, floor, parking_slot, reg_no, block_no) VALUES (?, ?, ?, ?, ?, ?)';
-        con.query(insertSql, values, (err, results) => {
-            callback(err, results);
+        // Check if room already exists
+        const checkSql = 'SELECT * FROM room WHERE room_no = ?';
+        con.query(checkSql, [roomNo], (err, results) => {
+            if (err) {
+                console.error('Error checking room:', err);
+                callback(err, null);
+                return;
+            }
+
+            if (results.length > 0) {
+                callback(new Error('Room number already exists'), null);
+                return;
+            }
+
+            // Validate room type
+            const validTypes = ['1BHK', '2BHK', '3BHK'];
+            if (!validTypes.includes(type)) {
+                callback(new Error('Invalid room type. Must be 1BHK, 2BHK, or 3BHK'), null);
+                return;
+            }
+
+            const insertSql = 'INSERT INTO room (room_no, type, floor, parking_slot, reg_no, block_no) VALUES (?, ?, ?, ?, ?, ?)';
+            con.query(insertSql, values, (err, results) => {
+                callback(err, results);
+            });
         });
     });
 }
 
+function deleteRoom(roomNo, callback) {
+    // The before_room_delete trigger will prevent deletion if there are active occupants
+    const sql = "DELETE FROM room WHERE room_no = ?";
+    con.query(sql, [roomNo], callback);
+}
+
 // ============= GENERAL FUNCTIONS =============
 function getdata(tablename, callback) {
-    const sql = 'select * from ' + tablename + ';';
+    const sql = 'SELECT * FROM ' + tablename + ';';
     con.query(sql, (err, results) => {
         callback(err, results);
     })
@@ -431,6 +556,13 @@ function deleteEvent(eventId, callback) {
 
 // ============= AMENITIES =============
 function createAmenity(values, callback) {
+    // Validate rating (0-5)
+    const rating = values[5];
+    if (rating < 0 || rating > 5) {
+        callback(new Error('Rating must be between 0 and 5'), null);
+        return;
+    }
+    
     const sql = 'INSERT INTO amenities VALUES (?, ?, ?, ?, ?, ?)';
     con.query(sql, values, (err, results) => {
         callback(err, results);
@@ -438,7 +570,7 @@ function createAmenity(values, callback) {
 }
 
 function getAmenities(callback) {
-    const sql = 'SELECT * FROM amenities ORDER BY amenity_name';
+    const sql = 'SELECT * FROM amenities ORDER BY rating DESC, amenity_name';
     con.query(sql, (err, results) => {
         callback(err, results);
     });
@@ -456,6 +588,13 @@ function deleteAmenity(amenityId, callback) {
 
 // ============= SERVICE PROVIDERS =============
 function createServiceProvider(values, callback) {
+    // Validate rating (0-5)
+    const rating = values[5];
+    if (rating < 0 || rating > 5) {
+        callback(new Error('Rating must be between 0 and 5'), null);
+        return;
+    }
+    
     const sql = 'INSERT INTO service_providers VALUES (?, ?, ?, ?, ?, ?)';
     con.query(sql, values, (err, results) => {
         callback(err, results);
@@ -463,7 +602,7 @@ function createServiceProvider(values, callback) {
 }
 
 function getServiceProviders(callback) {
-    const sql = 'SELECT * FROM service_providers ORDER BY service_type, provider_name';
+    const sql = 'SELECT * FROM service_providers ORDER BY rating DESC, service_type, provider_name';
     con.query(sql, (err, results) => {
         callback(err, results);
     });
@@ -481,8 +620,38 @@ function deleteServiceProvider(providerId, callback) {
 
 // ============= MAINTENANCE FUNCTIONS =============
 function createMaintenance(values, callback) {
-    const sql = "INSERT INTO maintenance (month, amount, status, apartment_id, due_date) VALUES (?, ?, ?, ?, ?)";
-    con.query(sql, values, callback);
+    const [month, amount, status, apartmentId, dueDate] = values;
+    
+    // Check if room exists
+    const checkRoomSql = 'SELECT * FROM room WHERE room_no = ?';
+    con.query(checkRoomSql, [apartmentId], (err, roomResults) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+
+        if (roomResults.length === 0) {
+            callback(new Error(`Room number ${apartmentId} does not exist`), null);
+            return;
+        }
+
+        // Check if maintenance already exists for this month and apartment
+        const checkMaintenanceSql = 'SELECT * FROM maintenance WHERE month = ? AND apartment_id = ?';
+        con.query(checkMaintenanceSql, [month, apartmentId], (err, maintenanceResults) => {
+            if (err) {
+                callback(err, null);
+                return;
+            }
+
+            if (maintenanceResults.length > 0) {
+                callback(new Error(`Maintenance bill for ${month} already exists for room ${apartmentId}`), null);
+                return;
+            }
+
+            const sql = "INSERT INTO maintenance (month, amount, status, apartment_id, due_date) VALUES (?, ?, ?, ?, ?)";
+            con.query(sql, values, callback);
+        });
+    });
 }
 
 function getAllMaintenance(callback) {
@@ -516,12 +685,27 @@ function deleteMaintenance(maintenanceId, callback) {
 }
 
 function payMaintenance(maintenanceId, callback) {
+    // The after_maintenance_payment trigger will log this payment
     const sql = "UPDATE maintenance SET status = 'Paid' WHERE maintenance_id = ?";
     con.query(sql, [maintenanceId], callback);
 }
 
 // ============= FEEDBACK FUNCTIONS =============
 function createFeedback(values, callback) {
+    const [userId, userType, feedbackText, rating] = values;
+    
+    // Validate rating (1-5)
+    if (rating < 1 || rating > 5) {
+        callback(new Error('Rating must be between 1 and 5'), null);
+        return;
+    }
+    
+    // Validate user type
+    if (!['owner', 'tenant'].includes(userType)) {
+        callback(new Error('User type must be either "owner" or "tenant"'), null);
+        return;
+    }
+    
     const sql = "INSERT INTO feedback (user_id, user_type, feedback_text, rating) VALUES (?, ?, ?, ?)";
     con.query(sql, values, callback);
 }
@@ -559,15 +743,611 @@ function deleteFeedback(feedbackId, callback) {
 }
 
 function updateFeedbackStatus(feedbackId, status, callback) {
+    const validStatuses = ['New', 'In Progress', 'Resolved'];
+    if (!validStatuses.includes(status)) {
+        callback(new Error('Invalid status. Must be New, In Progress, or Resolved'), null);
+        return;
+    }
+    
     const sql = "UPDATE feedback SET status = ? WHERE feedback_id = ?";
     con.query(sql, [status, feedbackId], callback);
 }
 
+// ============= STORED PROCEDURE FUNCTIONS =============
+
+function getUserCompleteProfile(userId, callback) {
+    const sql = 'CALL GetUserCompleteProfile(?)';
+    con.query(sql, [userId], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        // Stored procedures return an array of result sets
+        callback(null, results[0]);
+    });
+}
+
+function getMaintenanceSummary(month, callback) {
+    const sql = 'CALL GetMaintenanceSummary(?)';
+    con.query(sql, [month], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results[0]);
+    });
+}
+
+function getBlockStatistics(blockNo, callback) {
+    const sql = 'CALL GetBlockStatistics(?)';
+    con.query(sql, [blockNo], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results[0]);
+    });
+}
+
+function generateMonthlyMaintenance(month, baseAmount, dueDay, callback) {
+    // Validate inputs
+    if (!month || baseAmount <= 0 || dueDay < 1 || dueDay > 31) {
+        callback(new Error('Invalid parameters for maintenance generation'), null);
+        return;
+    }
+    
+    const sql = 'CALL GenerateMonthlyMaintenance(?, ?, ?)';
+    con.query(sql, [month, baseAmount, dueDay], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results[0]);
+    });
+}
+
+function getTopRatedServices(callback) {
+    const sql = 'CALL GetTopRatedServices()';
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        // Returns multiple result sets (amenities and service providers)
+        callback(null, {
+            amenities: results[0],
+            serviceProviders: results[1]
+        });
+    });
+}
+
+// ============= USER-DEFINED FUNCTION INVOCATIONS =============
+
+function getUserPendingMaintenance(userId, callback) {
+    const sql = 'SELECT GetUserPendingMaintenance(?) as pending_amount';
+    con.query(sql, [userId], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results[0]);
+    });
+}
+
+function getUserComplaintCount(userId, callback) {
+    const sql = 'SELECT GetUserComplaintCount(?) as complaint_count';
+    con.query(sql, [userId], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results[0]);
+    });
+}
+
+function getBlockOccupancyRate(blockNo, callback) {
+    const sql = 'SELECT GetBlockOccupancyRate(?) as occupancy_rate';
+    con.query(sql, [blockNo], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results[0]);
+    });
+}
+
+// ============= COMPLEX VIEW QUERIES =============
+
+function getRoomCompleteDetails(callback) {
+    const sql = 'SELECT * FROM room_complete_details ORDER BY room_no';
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+function getMaintenanceDashboard(callback) {
+    const sql = 'SELECT * FROM maintenance_dashboard ORDER BY month DESC';
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+function getUserActivitySummary(callback) {
+    const sql = 'SELECT * FROM user_activity_summary ORDER BY user_type, user_id';
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+// ============= ADVANCED AGGREGATE QUERIES =============
+
+function getComplaintStatistics(callback) {
+    const sql = `
+        SELECT 
+            b.block_no,
+            b.block_name,
+            COUNT(c.complaint_id) as total_complaints,
+            SUM(CASE WHEN c.status = 'Pending' THEN 1 ELSE 0 END) as pending_count,
+            SUM(CASE WHEN c.status = 'In Progress' THEN 1 ELSE 0 END) as in_progress_count,
+            SUM(CASE WHEN c.status = 'Resolved' THEN 1 ELSE 0 END) as resolved_count,
+            ROUND(AVG(CASE WHEN c.status = 'Resolved' THEN 
+                TIMESTAMPDIFF(DAY, c.reported_date, c.reported_date) ELSE NULL END), 2) as avg_resolution_days
+        FROM block b
+        LEFT JOIN complaints c ON b.block_no = c.block_no
+        GROUP BY b.block_no, b.block_name
+        ORDER BY total_complaints DESC
+    `;
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+function getMaintenanceCollectionReport(callback) {
+    const sql = `
+        SELECT 
+            DATE_FORMAT(m.created_at, '%Y-%m') as month_year,
+            COUNT(*) as total_bills,
+            SUM(m.amount) as total_billed,
+            SUM(CASE WHEN m.status = 'Paid' THEN m.amount ELSE 0 END) as total_collected,
+            SUM(CASE WHEN m.status = 'Unpaid' THEN m.amount ELSE 0 END) as total_pending,
+            ROUND((SUM(CASE WHEN m.status = 'Paid' THEN m.amount ELSE 0 END) / NULLIF(SUM(m.amount), 0)) * 100, 2) as collection_rate,
+            AVG(m.amount) as avg_bill_amount,
+            MIN(m.amount) as min_bill,
+            MAX(m.amount) as max_bill
+        FROM maintenance m
+        GROUP BY month_year
+        ORDER BY month_year DESC
+    `;
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+function getFeedbackStatistics(callback) {
+    const sql = `
+        SELECT 
+            f.user_type,
+            COUNT(*) as total_feedbacks,
+            AVG(f.rating) as avg_rating,
+            MIN(f.rating) as min_rating,
+            MAX(f.rating) as max_rating,
+            SUM(CASE WHEN f.status = 'New' THEN 1 ELSE 0 END) as new_count,
+            SUM(CASE WHEN f.status = 'In Progress' THEN 1 ELSE 0 END) as in_progress_count,
+            SUM(CASE WHEN f.status = 'Resolved' THEN 1 ELSE 0 END) as resolved_count,
+            SUM(CASE WHEN f.rating >= 4 THEN 1 ELSE 0 END) as positive_count,
+            SUM(CASE WHEN f.rating <= 2 THEN 1 ELSE 0 END) as negative_count
+        FROM feedback f
+        GROUP BY f.user_type
+    `;
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+function getRoomOccupancyByBlock(callback) {
+    const sql = `
+        SELECT 
+            b.block_no,
+            b.block_name,
+            COUNT(DISTINCT r.room_no) as total_rooms,
+            COUNT(DISTINCT o.owner_id) as rooms_with_owners,
+            COUNT(DISTINCT t.tenant_id) as rooms_with_tenants,
+            ROUND((COUNT(DISTINCT CASE WHEN o.owner_id IS NOT NULL OR t.tenant_id IS NOT NULL THEN r.room_no END) / 
+                   NULLIF(COUNT(DISTINCT r.room_no), 0)) * 100, 2) as occupancy_rate,
+            COUNT(DISTINCT r.parking_slot) as allocated_parking
+        FROM block b
+        INNER JOIN room r ON b.block_no = r.block_no
+        LEFT JOIN owner o ON r.room_no = o.room_no
+        LEFT JOIN tenant t ON r.room_no = t.room_no
+        GROUP BY b.block_no, b.block_name
+        ORDER BY occupancy_rate DESC
+    `;
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+function getAverageMaintenanceByRoomType(callback) {
+    const sql = `
+        SELECT 
+            r.type as room_type,
+            COUNT(DISTINCT m.maintenance_id) as total_bills,
+            AVG(m.amount) as avg_amount,
+            MIN(m.amount) as min_amount,
+            MAX(m.amount) as max_amount,
+            SUM(m.amount) as total_amount,
+            SUM(CASE WHEN m.status = 'Paid' THEN 1 ELSE 0 END) as paid_count,
+            SUM(CASE WHEN m.status = 'Unpaid' THEN 1 ELSE 0 END) as unpaid_count,
+            ROUND((SUM(CASE WHEN m.status = 'Paid' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)) * 100, 2) as payment_rate
+        FROM room r
+        INNER JOIN maintenance m ON r.room_no = m.apartment_id
+        GROUP BY r.type
+        ORDER BY avg_amount DESC
+    `;
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+// ============= COMPLEX NESTED QUERIES =============
+
+function getUserDashboardData(userId, callback) {
+    const userType = userId.substring(0, 1);
+    const numericId = userId.substring(2);
+    
+    let sql = '';
+    
+    if (userType === 'o') {
+        sql = `
+            SELECT 
+                o.owner_id,
+                o.name,
+                o.room_no,
+                r.type as room_type,
+                r.floor,
+                r.parking_slot,
+                b.block_name,
+                (SELECT COUNT(*) FROM complaints c WHERE c.room_no = o.room_no) as total_complaints,
+                (SELECT COUNT(*) FROM complaints c WHERE c.room_no = o.room_no AND c.status = 'Pending') as pending_complaints,
+                (SELECT COALESCE(SUM(amount), 0) FROM maintenance m WHERE m.apartment_id = o.room_no AND m.status = 'Unpaid') as pending_maintenance,
+                (SELECT COUNT(*) FROM tenant t WHERE t.room_no = o.room_no) as tenants_count,
+                (SELECT COUNT(*) FROM feedback f WHERE f.user_id = o.owner_id AND f.user_type = 'owner') as feedbacks_given
+            FROM owner o
+            LEFT JOIN room r ON o.room_no = r.room_no
+            LEFT JOIN block b ON r.block_no = b.block_no
+            WHERE o.owner_id = ?
+        `;
+    } else if (userType === 't') {
+        sql = `
+            SELECT 
+                t.tenant_id,
+                t.name,
+                t.room_no,
+                r.type as room_type,
+                r.floor,
+                r.parking_slot,
+                b.block_name,
+                (SELECT COUNT(*) FROM complaints c WHERE c.room_no = t.room_no) as total_complaints,
+                (SELECT COUNT(*) FROM complaints c WHERE c.room_no = t.room_no AND c.status = 'Pending') as pending_complaints,
+                (SELECT COALESCE(SUM(amount), 0) FROM maintenance m WHERE m.apartment_id = t.room_no AND m.status = 'Unpaid') as pending_maintenance,
+                (SELECT name FROM owner o WHERE o.room_no = t.room_no) as owner_name,
+                (SELECT COUNT(*) FROM feedback f WHERE f.user_id = t.tenant_id AND f.user_type = 'tenant') as feedbacks_given
+            FROM tenant t
+            LEFT JOIN room r ON t.room_no = r.room_no
+            LEFT JOIN block b ON r.block_no = b.block_no
+            WHERE t.tenant_id = ?
+        `;
+    } else if (userType === 'e') {
+        sql = `
+            SELECT 
+                e.emp_id,
+                e.emp_name,
+                e.emp_type,
+                e.salary,
+                e.age,
+                b.block_no,
+                b.block_name,
+                (SELECT COUNT(*) FROM complaints c WHERE c.block_no = e.block_no AND c.status = 'In Progress') as assigned_complaints,
+                (SELECT COUNT(*) FROM room r WHERE r.block_no = e.block_no) as total_rooms_in_block
+            FROM employee e
+            LEFT JOIN block b ON e.block_no = b.block_no
+            WHERE e.emp_id = ?
+        `;
+    } else {
+        callback(new Error('Invalid user type'), null);
+        return;
+    }
+    
+    con.query(sql, [numericId], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results[0]);
+    });
+}
+
+// ============= MAINTENANCE AUDIT LOG FUNCTIONS =============
+
+function getMaintenanceAuditLog(callback) {
+    const sql = `
+        SELECT 
+            mal.*,
+            r.type as room_type,
+            r.floor,
+            o.name as owner_name,
+            t.name as tenant_name
+        FROM maintenance_audit_log mal
+        LEFT JOIN room r ON mal.apartment_id = r.room_no
+        LEFT JOIN owner o ON r.room_no = o.room_no
+        LEFT JOIN tenant t ON r.room_no = t.room_no
+        ORDER BY mal.paid_date DESC
+    `;
+    con.query(sql, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+function getMaintenanceAuditByApartment(apartmentId, callback) {
+    const sql = `
+        SELECT * FROM maintenance_audit_log 
+        WHERE apartment_id = ? 
+        ORDER BY paid_date DESC
+    `;
+    con.query(sql, [apartmentId], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+// ============= VALIDATION FUNCTIONS =============
+
+function validateRoomExists(roomNo, callback) {
+    const sql = 'SELECT * FROM room WHERE room_no = ?';
+    con.query(sql, [roomNo], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results.length > 0);
+    });
+}
+
+function validateBlockExists(blockNo, callback) {
+    const sql = 'SELECT * FROM block WHERE block_no = ?';
+    con.query(sql, [blockNo], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results.length > 0);
+    });
+}
+
+function validateUserExists(userId, callback) {
+    const sql = 'SELECT * FROM auth WHERE user_id = ?';
+    con.query(sql, [userId], (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results.length > 0);
+    });
+}
+
+// ============= ADVANCED SEARCH & FILTER FUNCTIONS =============
+
+function searchRooms(filters, callback) {
+    let sql = 'SELECT r.*, b.block_name FROM room r LEFT JOIN block b ON r.block_no = b.block_no WHERE 1=1';
+    const params = [];
+    
+    if (filters.type) {
+        sql += ' AND r.type = ?';
+        params.push(filters.type);
+    }
+    
+    if (filters.floor) {
+        sql += ' AND r.floor = ?';
+        params.push(filters.floor);
+    }
+    
+    if (filters.blockNo) {
+        sql += ' AND r.block_no = ?';
+        params.push(filters.blockNo);
+    }
+    
+    if (filters.hasParking !== undefined) {
+        if (filters.hasParking) {
+            sql += ' AND r.parking_slot IS NOT NULL';
+        } else {
+            sql += ' AND r.parking_slot IS NULL';
+        }
+    }
+    
+    sql += ' ORDER BY r.room_no';
+    
+    con.query(sql, params, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+function searchComplaints(filters, callback) {
+    let sql = `
+        SELECT c.*, r.type as room_type, b.block_name,
+               o.name as owner_name, t.name as tenant_name
+        FROM complaints c
+        LEFT JOIN room r ON c.room_no = r.room_no
+        LEFT JOIN block b ON c.block_no = b.block_no
+        LEFT JOIN owner o ON r.room_no = o.room_no
+        LEFT JOIN tenant t ON r.room_no = t.room_no
+        WHERE 1=1
+    `;
+    const params = [];
+    
+    if (filters.status) {
+        sql += ' AND c.status = ?';
+        params.push(filters.status);
+    }
+    
+    if (filters.blockNo) {
+        sql += ' AND c.block_no = ?';
+        params.push(filters.blockNo);
+    }
+    
+    if (filters.roomNo) {
+        sql += ' AND c.room_no = ?';
+        params.push(filters.roomNo);
+    }
+    
+    if (filters.dateFrom) {
+        sql += ' AND c.reported_date >= ?';
+        params.push(filters.dateFrom);
+    }
+    
+    if (filters.dateTo) {
+        sql += ' AND c.reported_date <= ?';
+        params.push(filters.dateTo);
+    }
+    
+    sql += ' ORDER BY c.reported_date DESC';
+    
+    con.query(sql, params, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+function searchMaintenance(filters, callback) {
+    let sql = `
+        SELECT m.*, r.type as room_type, r.floor,
+               o.name as owner_name, t.name as tenant_name
+        FROM maintenance m
+        LEFT JOIN room r ON m.apartment_id = r.room_no
+        LEFT JOIN owner o ON r.room_no = o.room_no
+        LEFT JOIN tenant t ON r.room_no = t.room_no
+        WHERE 1=1
+    `;
+    const params = [];
+    
+    if (filters.status) {
+        sql += ' AND m.status = ?';
+        params.push(filters.status);
+    }
+    
+    if (filters.month) {
+        sql += ' AND m.month = ?';
+        params.push(filters.month);
+    }
+    
+    if (filters.apartmentId) {
+        sql += ' AND m.apartment_id = ?';
+        params.push(filters.apartmentId);
+    }
+    
+    if (filters.minAmount) {
+        sql += ' AND m.amount >= ?';
+        params.push(filters.minAmount);
+    }
+    
+    if (filters.maxAmount) {
+        sql += ' AND m.amount <= ?';
+        params.push(filters.maxAmount);
+    }
+    
+    sql += ' ORDER BY m.created_at DESC';
+    
+    con.query(sql, params, (err, results) => {
+        if (err) {
+            callback(err, null);
+            return;
+        }
+        callback(null, results);
+    });
+}
+
+// ============= BULK OPERATIONS =============
+
+function bulkUpdateComplaintStatus(complaintIds, status, callback) {
+    if (!Array.isArray(complaintIds) || complaintIds.length === 0) {
+        callback(new Error('Invalid complaint IDs array'), null);
+        return;
+    }
+    
+    const placeholders = complaintIds.map(() => '?').join(',');
+    const sql = `UPDATE complaints SET status = ? WHERE complaint_id IN (${placeholders})`;
+    const params = [status, ...complaintIds];
+    
+    con.query(sql, params, callback);
+}
+
+function bulkPayMaintenance(maintenanceIds, callback) {
+    if (!Array.isArray(maintenanceIds) || maintenanceIds.length === 0) {
+        callback(new Error('Invalid maintenance IDs array'), null);
+        return;
+    }
+    
+    const placeholders = maintenanceIds.map(() => '?').join(',');
+    const sql = `UPDATE maintenance SET status = 'Paid' WHERE maintenance_id IN (${placeholders})`;
+    
+    con.query(sql, maintenanceIds, callback);
+}
+
 // ============= EXPORTS =============
 module.exports = {
+    // Connection
     connect,
+    
+    // Authentication
     authoriseuser,
     createuserid,
+    
+    // Complaints
     registercomplaint,
     viewcomplaints,
     viewcomplaint: viewcomplaints,
@@ -575,6 +1355,8 @@ module.exports = {
     totalcomplaint,
     updateComplaintStatus,
     deleteComplaint,
+    
+    // Owner Functions
     createowner,
     createownerproof,
     totalowner,
@@ -582,6 +1364,8 @@ module.exports = {
     ownertenantdetails,
     updateOwner,
     deleteOwner,
+    
+    // Tenant Functions
     createtenant,
     createtenantproof,
     totaltenant,
@@ -589,38 +1373,100 @@ module.exports = {
     paymaintanence,
     updateTenant,
     deleteTenant,
+    
+    // Employee Functions
     createEmployee,
     totalemployee,
     empsalary,
     updateEmployee,
     deleteEmployee,
+    
+    // Parking & Room Functions
     bookslot,
     viewparking,
     getBlocks,
     addRoom,
+    deleteRoom,
+    
+    // General Functions
     getdata,
+    
+    // Community Events
     createEvent,
     getEvents,
     updateEvent,
     deleteEvent,
+    
+    // Amenities
     createAmenity,
     getAmenities,
     updateAmenity,
     deleteAmenity,
+    
+    // Service Providers
     createServiceProvider,
     getServiceProviders,
     updateServiceProvider,
     deleteServiceProvider,
+    
+    // Maintenance Functions
     createMaintenance,
     getAllMaintenance,
     getMaintenanceByApartment,
     updateMaintenance,
     deleteMaintenance,
     payMaintenance,
+    
+    // Feedback Functions
     createFeedback,
     getAllFeedback,
     getFeedbackByUser,
     updateFeedback,
     deleteFeedback,
-    updateFeedbackStatus
+    updateFeedbackStatus,
+    
+    // Stored Procedures
+    getUserCompleteProfile,
+    getMaintenanceSummary,
+    getBlockStatistics,
+    generateMonthlyMaintenance,
+    getTopRatedServices,
+    
+    // User-Defined Functions
+    getUserPendingMaintenance,
+    getUserComplaintCount,
+    getBlockOccupancyRate,
+    
+    // Complex Views
+    getRoomCompleteDetails,
+    getMaintenanceDashboard,
+    getUserActivitySummary,
+    
+    // Advanced Aggregates
+    getComplaintStatistics,
+    getMaintenanceCollectionReport,
+    getFeedbackStatistics,
+    getRoomOccupancyByBlock,
+    getAverageMaintenanceByRoomType,
+    
+    // Complex Nested Queries
+    getUserDashboardData,
+    
+    // Maintenance Audit
+    getMaintenanceAuditLog,
+    getMaintenanceAuditByApartment,
+    
+    // Validation Functions
+    validateRoomExists,
+    validateBlockExists,
+    validateUserExists,
+    
+    // Search & Filter
+    searchRooms,
+    searchComplaints,
+    searchMaintenance,
+    
+    // Bulk Operations
+    bulkUpdateComplaintStatus,
+    bulkPayMaintenance
 };

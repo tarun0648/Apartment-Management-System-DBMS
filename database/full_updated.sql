@@ -1,5 +1,5 @@
 -- ================================================
--- COMPLETE DATABASE SETUP FOR APARTMENT MANAGEMENT SYSTEM
+-- COMPLETE DATABASE SETUP FOR APPARTMENT MANAGEMENT SYSTEM
 -- ================================================
 
 -- Drop database if exists and create fresh

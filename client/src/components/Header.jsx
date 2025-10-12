@@ -19,7 +19,7 @@ function Header(props) {
         <div className="ml-4 flex items-center justify-between">
           <img className="h-10 w-10" src={jasmineImage} alt="Jasmine Icon" />
           <h1 className="text-base md:text-lg px-2 font-semibold text-white">
-            Jasmine Towers
+            APPARTMENT MANAGEMENT SYSTEM
           </h1>
         </div>
         <div>
