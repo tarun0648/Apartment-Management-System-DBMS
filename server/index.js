@@ -82,6 +82,33 @@ app.get('/maintenance', (req, res) => {
   });
 });
 
+// Get all blocks
+app.get('/blocks', (req, res) => {
+  db.getBlocks((err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+// Add room
+app.post('/addroom', (req, res) => {
+  const { roomNo, type, floor, parkingSlot, regNo, blockNo } = req.body;
+  const values = [roomNo, type, floor, parkingSlot || null, regNo || null, blockNo];
+  
+  db.addRoom(values, (err, result) => {
+    if(err) {
+      console.log(err);
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(200).json({ message: 'Room added successfully' });
+    }
+  });
+});
+
 // Get maintenance by apartment
 app.post('/maintenance/apartment', (req, res) => {
   const { apartmentId } = req.body;

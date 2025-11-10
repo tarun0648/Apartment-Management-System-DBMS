@@ -14,6 +14,84 @@ function connect() {
     con.connect(function(err) {
         if (err) throw err;
         console.log("Database Connected!");
+        // Create views after connection
+        createRequiredViews();
+    });
+}
+
+// ============= CREATE REQUIRED VIEWS =============
+function createRequiredViews() {
+    const viewsSql = `
+        -- View 1: Room Complete Details
+        CREATE OR REPLACE VIEW room_complete_details AS
+        SELECT 
+            r.room_no,
+            r.type,
+            r.floor,
+            r.parking_slot,
+            r.reg_no,
+            r.block_no,
+            b.block_name,
+            o.owner_id,
+            o.name as owner_name,
+            o.age as owner_age,
+            t.tenant_id,
+            t.name as tenant_name,
+            t.age as tenant_age,
+            CASE 
+                WHEN o.owner_id IS NOT NULL AND t.tenant_id IS NOT NULL THEN 'Occupied by Owner & Tenant'
+                WHEN o.owner_id IS NOT NULL THEN 'Occupied by Owner'
+                WHEN t.tenant_id IS NOT NULL THEN 'Occupied by Tenant'
+                ELSE 'Vacant'
+            END as occupancy_status
+        FROM room r
+        LEFT JOIN block b ON r.block_no = b.block_no
+        LEFT JOIN owner o ON r.room_no = o.room_no
+        LEFT JOIN tenant t ON r.room_no = t.room_no;
+
+        -- View 2: Maintenance Dashboard
+        CREATE OR REPLACE VIEW maintenance_dashboard AS
+        SELECT 
+            m.month,
+            COUNT(*) as total_bills,
+            SUM(m.amount) as total_amount,
+            SUM(CASE WHEN m.status = 'Paid' THEN m.amount ELSE 0 END) as paid_amount,
+            SUM(CASE WHEN m.status = 'Unpaid' THEN m.amount ELSE 0 END) as unpaid_amount,
+            SUM(CASE WHEN m.status = 'Paid' THEN 1 ELSE 0 END) as paid_count,
+            SUM(CASE WHEN m.status = 'Unpaid' THEN 1 ELSE 0 END) as unpaid_count,
+            ROUND((SUM(CASE WHEN m.status = 'Paid' THEN m.amount ELSE 0 END) / NULLIF(SUM(m.amount), 0)) * 100, 2) as collection_rate
+        FROM maintenance m
+        GROUP BY m.month;
+
+        -- View 3: User Activity Summary
+        CREATE OR REPLACE VIEW user_activity_summary AS
+        SELECT 
+            'owner' as user_type,
+            o.owner_id as user_id,
+            o.name as user_name,
+            o.room_no,
+            (SELECT COUNT(*) FROM complaints c WHERE c.room_no = o.room_no) as total_complaints,
+            (SELECT COUNT(*) FROM feedback f WHERE f.user_id = o.owner_id AND f.user_type = 'owner') as total_feedback,
+            (SELECT COALESCE(SUM(amount), 0) FROM maintenance m WHERE m.apartment_id = o.room_no AND m.status = 'Unpaid') as pending_maintenance
+        FROM owner o
+        UNION ALL
+        SELECT 
+            'tenant' as user_type,
+            t.tenant_id as user_id,
+            t.name as user_name,
+            t.room_no,
+            (SELECT COUNT(*) FROM complaints c WHERE c.room_no = t.room_no) as total_complaints,
+            (SELECT COUNT(*) FROM feedback f WHERE f.user_id = t.tenant_id AND f.user_type = 'tenant') as total_feedback,
+            (SELECT COALESCE(SUM(amount), 0) FROM maintenance m WHERE m.apartment_id = t.room_no AND m.status = 'Unpaid') as pending_maintenance
+        FROM tenant t;
+    `;
+    
+    con.query(viewsSql, (err, results) => {
+        if (err) {
+            console.error('Error creating views:', err);
+        } else {
+            console.log('Required views created successfully!');
+        }
     });
 }
 
@@ -169,8 +247,7 @@ function deleteComplaint(complaintId, callback) {
 
 // ============= OWNER FUNCTIONS =============
 function createowner(values, callback) {
-    // Check if room exists and is not already occupied
-    const roomNo = values[4]; // room_no is at index 4
+    const roomNo = values[4];
     
     const checkRoomSql = 'SELECT * FROM room WHERE room_no = ?';
     con.query(checkRoomSql, [roomNo], (err, roomResults) => {
@@ -184,7 +261,6 @@ function createowner(values, callback) {
             return;
         }
 
-        // Check if room already has an owner
         const checkOwnerSql = 'SELECT * FROM owner WHERE room_no = ?';
         con.query(checkOwnerSql, [roomNo], (err, ownerResults) => {
             if (err) {
@@ -197,7 +273,6 @@ function createowner(values, callback) {
                 return;
             }
 
-            // Insert owner (trigger will auto-create auth entry)
             const sql = 'INSERT INTO owner VALUES(?,?,?,?,?,?)';
             con.query(sql, values, (err, results) => {
                 callback(err, results);
@@ -255,7 +330,6 @@ function updateOwner(ownerId, values, callback) {
 }
 
 function deleteOwner(ownerId, callback) {
-    // First delete from auth table
     const deleteAuthSql = "DELETE FROM auth WHERE user_id = ?";
     con.query(deleteAuthSql, [`o-${ownerId}`], (err) => {
         if (err) {
@@ -263,7 +337,6 @@ function deleteOwner(ownerId, callback) {
             return;
         }
         
-        // Then delete from owner table
         const sql = "DELETE FROM owner WHERE owner_id = ?";
         con.query(sql, [ownerId], callback);
     });
@@ -271,8 +344,7 @@ function deleteOwner(ownerId, callback) {
 
 // ============= TENANT FUNCTIONS =============
 function createtenant(values, callback) {
-    // Check if room exists
-    const roomNo = values[4]; // room_no is at index 4
+    const roomNo = values[4];
     
     const checkRoomSql = 'SELECT * FROM room WHERE room_no = ?';
     con.query(checkRoomSql, [roomNo], (err, roomResults) => {
@@ -286,7 +358,6 @@ function createtenant(values, callback) {
             return;
         }
 
-        // Insert tenant (trigger will auto-create auth entry)
         const sql = 'INSERT INTO tenant VALUES(?,?,?,null,?,?)';
         con.query(sql, values, (err, results) => {
             callback(err, results);
@@ -328,7 +399,6 @@ function updateTenant(tenantId, values, callback) {
 }
 
 function deleteTenant(tenantId, callback) {
-    // First delete from auth table
     const deleteAuthSql = "DELETE FROM auth WHERE user_id = ?";
     con.query(deleteAuthSql, [`t-${tenantId}`], (err) => {
         if (err) {
@@ -336,7 +406,6 @@ function deleteTenant(tenantId, callback) {
             return;
         }
         
-        // Then delete from tenant table
         const sql = "DELETE FROM tenant WHERE tenant_id = ?";
         con.query(sql, [tenantId], callback);
     });
@@ -344,8 +413,7 @@ function deleteTenant(tenantId, callback) {
 
 // ============= EMPLOYEE FUNCTIONS =============
 function createEmployee(values, callback) {
-    // Check if block exists
-    const blockNo = values[5]; // block_no is at index 5
+    const blockNo = values[5];
     
     const checkBlockSql = 'SELECT * FROM block WHERE block_no = ?';
     con.query(checkBlockSql, [blockNo], (err, blockResults) => {
@@ -359,7 +427,6 @@ function createEmployee(values, callback) {
             return;
         }
 
-        // Insert employee (trigger will auto-create auth entry)
         const sql = 'INSERT INTO employee VALUES(?,?,?,?,?,?)';
         con.query(sql, values, (err, results) => {
             callback(err, results);
@@ -387,7 +454,6 @@ function updateEmployee(empId, values, callback) {
 }
 
 function deleteEmployee(empId, callback) {
-    // First delete from auth table
     const deleteAuthSql = "DELETE FROM auth WHERE user_id = ?";
     con.query(deleteAuthSql, [`e-${empId}`], (err) => {
         if (err) {
@@ -395,7 +461,6 @@ function deleteEmployee(empId, callback) {
             return;
         }
         
-        // Then delete from employee table
         const sql = "DELETE FROM employee WHERE emp_id = ?";
         con.query(sql, [empId], callback);
     });
@@ -472,7 +537,6 @@ function getBlocks(callback) {
 function addRoom(values, callback) {
     const [roomNo, type, floor, parkingSlot, regNo, blockNo] = values;
     
-    // Check if block exists
     const checkBlockSql = 'SELECT * FROM block WHERE block_no = ?';
     con.query(checkBlockSql, [blockNo], (err, blockResults) => {
         if (err) {
@@ -486,7 +550,6 @@ function addRoom(values, callback) {
             return;
         }
 
-        // Check if room already exists
         const checkSql = 'SELECT * FROM room WHERE room_no = ?';
         con.query(checkSql, [roomNo], (err, results) => {
             if (err) {
@@ -500,7 +563,6 @@ function addRoom(values, callback) {
                 return;
             }
 
-            // Validate room type
             const validTypes = ['1BHK', '2BHK', '3BHK'];
             if (!validTypes.includes(type)) {
                 callback(new Error('Invalid room type. Must be 1BHK, 2BHK, or 3BHK'), null);
@@ -516,7 +578,6 @@ function addRoom(values, callback) {
 }
 
 function deleteRoom(roomNo, callback) {
-    // The before_room_delete trigger will prevent deletion if there are active occupants
     const sql = "DELETE FROM room WHERE room_no = ?";
     con.query(sql, [roomNo], callback);
 }
@@ -556,7 +617,6 @@ function deleteEvent(eventId, callback) {
 
 // ============= AMENITIES =============
 function createAmenity(values, callback) {
-    // Validate rating (0-5)
     const rating = values[5];
     if (rating < 0 || rating > 5) {
         callback(new Error('Rating must be between 0 and 5'), null);
@@ -588,7 +648,6 @@ function deleteAmenity(amenityId, callback) {
 
 // ============= SERVICE PROVIDERS =============
 function createServiceProvider(values, callback) {
-    // Validate rating (0-5)
     const rating = values[5];
     if (rating < 0 || rating > 5) {
         callback(new Error('Rating must be between 0 and 5'), null);
@@ -622,7 +681,6 @@ function deleteServiceProvider(providerId, callback) {
 function createMaintenance(values, callback) {
     const [month, amount, status, apartmentId, dueDate] = values;
     
-    // Check if room exists
     const checkRoomSql = 'SELECT * FROM room WHERE room_no = ?';
     con.query(checkRoomSql, [apartmentId], (err, roomResults) => {
         if (err) {
@@ -635,7 +693,6 @@ function createMaintenance(values, callback) {
             return;
         }
 
-        // Check if maintenance already exists for this month and apartment
         const checkMaintenanceSql = 'SELECT * FROM maintenance WHERE month = ? AND apartment_id = ?';
         con.query(checkMaintenanceSql, [month, apartmentId], (err, maintenanceResults) => {
             if (err) {
@@ -685,7 +742,6 @@ function deleteMaintenance(maintenanceId, callback) {
 }
 
 function payMaintenance(maintenanceId, callback) {
-    // The after_maintenance_payment trigger will log this payment
     const sql = "UPDATE maintenance SET status = 'Paid' WHERE maintenance_id = ?";
     con.query(sql, [maintenanceId], callback);
 }
@@ -694,13 +750,11 @@ function payMaintenance(maintenanceId, callback) {
 function createFeedback(values, callback) {
     const [userId, userType, feedbackText, rating] = values;
     
-    // Validate rating (1-5)
     if (rating < 1 || rating > 5) {
         callback(new Error('Rating must be between 1 and 5'), null);
         return;
     }
     
-    // Validate user type
     if (!['owner', 'tenant'].includes(userType)) {
         callback(new Error('User type must be either "owner" or "tenant"'), null);
         return;
@@ -743,9 +797,9 @@ function deleteFeedback(feedbackId, callback) {
 }
 
 function updateFeedbackStatus(feedbackId, status, callback) {
-    const validStatuses = ['New', 'In Progress', 'Resolved'];
+    const validStatuses = ['New', 'In Progress', 'Resolved', 'Closed'];
     if (!validStatuses.includes(status)) {
-        callback(new Error('Invalid status. Must be New, In Progress, or Resolved'), null);
+        callback(new Error('Invalid status. Must be New, In Progress, Resolved, or Closed'), null);
         return;
     }
     
@@ -762,7 +816,6 @@ function getUserCompleteProfile(userId, callback) {
             callback(err, null);
             return;
         }
-        // Stored procedures return an array of result sets
         callback(null, results[0]);
     });
 }
@@ -790,7 +843,6 @@ function getBlockStatistics(blockNo, callback) {
 }
 
 function generateMonthlyMaintenance(month, baseAmount, dueDay, callback) {
-    // Validate inputs
     if (!month || baseAmount <= 0 || dueDay < 1 || dueDay > 31) {
         callback(new Error('Invalid parameters for maintenance generation'), null);
         return;
@@ -813,7 +865,6 @@ function getTopRatedServices(callback) {
             callback(err, null);
             return;
         }
-        // Returns multiple result sets (amenities and service providers)
         callback(null, {
             amenities: results[0],
             serviceProviders: results[1]
@@ -1343,13 +1394,11 @@ function bulkPayMaintenance(maintenanceIds, callback) {
 function createLeaseAgreement(values, callback) {
     const [tenantId, ownerId, apartmentNo, startDate, endDate, monthlyRent, securityDeposit, leaseTerms] = values;
     
-    // Validate dates
     if (new Date(startDate) >= new Date(endDate)) {
         callback(new Error('Start date must be before end date'), null);
         return;
     }
     
-    // Check if apartment exists
     const checkApartmentSql = 'SELECT * FROM room WHERE room_no = ?';
     con.query(checkApartmentSql, [apartmentNo], (err, apartmentResults) => {
         if (err) {
@@ -1362,7 +1411,6 @@ function createLeaseAgreement(values, callback) {
             return;
         }
         
-        // Check if tenant exists
         const checkTenantSql = 'SELECT * FROM tenant WHERE tenant_id = ?';
         con.query(checkTenantSql, [tenantId], (err, tenantResults) => {
             if (err) {
@@ -1375,7 +1423,6 @@ function createLeaseAgreement(values, callback) {
                 return;
             }
             
-            // Check if owner exists
             const checkOwnerSql = 'SELECT * FROM owner WHERE owner_id = ?';
             con.query(checkOwnerSql, [ownerId], (err, ownerResults) => {
                 if (err) {
@@ -1388,7 +1435,6 @@ function createLeaseAgreement(values, callback) {
                     return;
                 }
                 
-                // Check for overlapping active leases
                 const checkOverlapSql = `
                     SELECT * FROM lease_agreements 
                     WHERE apartment_no = ? 
@@ -1410,7 +1456,6 @@ function createLeaseAgreement(values, callback) {
                         return;
                     }
                     
-                    // Insert lease agreement
                     const insertSql = `
                         INSERT INTO lease_agreements 
                         (tenant_id, owner_id, apartment_no, start_date, end_date, monthly_rent, security_deposit, lease_terms, status) 
@@ -1572,7 +1617,6 @@ function getActiveLeases(callback) {
 function registerVisitor(values, callback) {
     const [visitorName, apartmentNo, ownerId, tenantId, entryTime, purpose, contactNumber, idProofType, idProofNumber] = values;
     
-    // Validate that apartment exists
     const checkApartmentSql = 'SELECT * FROM room WHERE room_no = ?';
     con.query(checkApartmentSql, [apartmentNo], (err, apartmentResults) => {
         if (err) {
@@ -1585,10 +1629,9 @@ function registerVisitor(values, callback) {
             return;
         }
         
-        // Insert visitor
         const insertSql = `
             INSERT INTO visitors 
-            (visitor_name, apartment_no, owner_id, tenant_id, entry_time, purpose, contact_number, id_proof_type, id_proof_number, status) 
+            (visitor_name, apartment_no, owner_id, tenant_id, entry_time, purpose, contact_number, id_proof_type, id_proof_number, visitor_status) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Inside')
         `;
         con.query(insertSql, values, callback);
@@ -1598,8 +1641,8 @@ function registerVisitor(values, callback) {
 function checkoutVisitor(visitorId, callback) {
     const sql = `
         UPDATE visitors 
-        SET exit_time = NOW(), status = 'Exited' 
-        WHERE visitor_id = ? AND status = 'Inside'
+        SET exit_time = NOW(), visitor_status = 'Exited' 
+        WHERE visitor_id = ? AND visitor_status = 'Inside'
     `;
     con.query(sql, [visitorId], callback);
 }
@@ -1612,25 +1655,26 @@ function getAllVisitors(callback) {
             r.floor,
             b.block_name,
             CASE 
-                WHEN v.owner_id IS NOT NULL THEN o.name
-                WHEN v.tenant_id IS NOT NULL THEN t.name
+                WHEN v.requested_by = 'owner' THEN o.name
+                WHEN v.requested_by = 'tenant' THEN t.name
                 ELSE 'Unknown'
-            END as host_name,
+            END as requester_name,
             CASE 
-                WHEN v.owner_id IS NOT NULL THEN 'Owner'
-                WHEN v.tenant_id IS NOT NULL THEN 'Tenant'
-                ELSE 'Unknown'
-            END as host_type,
+                WHEN v.approved_by IS NOT NULL THEN ba.admin_name
+                ELSE NULL
+            END as approved_by_name,
             CASE 
                 WHEN v.exit_time IS NOT NULL THEN TIMESTAMPDIFF(MINUTE, v.entry_time, v.exit_time)
-                ELSE TIMESTAMPDIFF(MINUTE, v.entry_time, NOW())
+                WHEN v.visitor_status = 'Inside' THEN TIMESTAMPDIFF(MINUTE, v.entry_time, NOW())
+                ELSE NULL
             END as duration_minutes
         FROM visitors v
         INNER JOIN room r ON v.apartment_no = r.room_no
         INNER JOIN block b ON r.block_no = b.block_no
-        LEFT JOIN owner o ON v.owner_id = o.owner_id
-        LEFT JOIN tenant t ON v.tenant_id = t.tenant_id
-        ORDER BY v.entry_time DESC
+        LEFT JOIN owner o ON v.requester_id = o.owner_id AND v.requested_by = 'owner'
+        LEFT JOIN tenant t ON v.requester_id = t.tenant_id AND v.requested_by = 'tenant'
+        LEFT JOIN block_admin ba ON v.approved_by = ba.admin_id
+        ORDER BY v.created_at DESC
     `;
     con.query(sql, callback);
 }
@@ -1640,19 +1684,20 @@ function getVisitorsByApartment(apartmentNo, callback) {
         SELECT 
             v.*,
             CASE 
-                WHEN v.owner_id IS NOT NULL THEN o.name
-                WHEN v.tenant_id IS NOT NULL THEN t.name
+                WHEN v.requested_by = 'owner' THEN o.name
+                WHEN v.requested_by = 'tenant' THEN t.name
                 ELSE 'Unknown'
-            END as host_name,
+            END as requester_name,
             CASE 
                 WHEN v.exit_time IS NOT NULL THEN TIMESTAMPDIFF(MINUTE, v.entry_time, v.exit_time)
-                ELSE TIMESTAMPDIFF(MINUTE, v.entry_time, NOW())
+                WHEN v.visitor_status = 'Inside' THEN TIMESTAMPDIFF(MINUTE, v.entry_time, NOW())
+                ELSE NULL
             END as duration_minutes
         FROM visitors v
-        LEFT JOIN owner o ON v.owner_id = o.owner_id
-        LEFT JOIN tenant t ON v.tenant_id = t.tenant_id
+        LEFT JOIN owner o ON v.requester_id = o.owner_id AND v.requested_by = 'owner'
+        LEFT JOIN tenant t ON v.requester_id = t.tenant_id AND v.requested_by = 'tenant'
         WHERE v.apartment_no = ?
-        ORDER BY v.entry_time DESC
+        ORDER BY v.created_at DESC
     `;
     con.query(sql, [apartmentNo], callback);
 }
@@ -1718,11 +1763,9 @@ function getVisitorStatistics(callback) {
 
 // ============= VISITORS WITH APPROVAL WORKFLOW =============
 
-// Request visitor (Owner/Tenant creates request)
 function requestVisitor(values, callback) {
     const [visitorName, apartmentNo, ownerId, tenantId, requestedBy, requesterId, entryTime, purpose, contactNumber, idProofType, idProofNumber] = values;
     
-    // Validate that apartment exists
     const checkApartmentSql = 'SELECT * FROM room WHERE room_no = ?';
     con.query(checkApartmentSql, [apartmentNo], (err, apartmentResults) => {
         if (err) {
@@ -1735,7 +1778,6 @@ function requestVisitor(values, callback) {
             return;
         }
         
-        // Insert visitor request
         const insertSql = `
             INSERT INTO visitors 
             (visitor_name, apartment_no, owner_id, tenant_id, requested_by, requester_id, 
@@ -1747,7 +1789,6 @@ function requestVisitor(values, callback) {
     });
 }
 
-// Get pending visitor requests (Admin view)
 function getPendingVisitorRequests(callback) {
     const sql = 'CALL GetPendingVisitorRequests()';
     con.query(sql, (err, results) => {
@@ -1759,7 +1800,6 @@ function getPendingVisitorRequests(callback) {
     });
 }
 
-// Approve visitor request (Admin only)
 function approveVisitorRequest(visitorId, adminId, callback) {
     const sql = `
         UPDATE visitors 
@@ -1772,7 +1812,6 @@ function approveVisitorRequest(visitorId, adminId, callback) {
     con.query(sql, [adminId, visitorId], callback);
 }
 
-// Reject visitor request (Admin only)
 function rejectVisitorRequest(visitorId, adminId, rejectionReason, callback) {
     const sql = `
         UPDATE visitors 
@@ -1786,7 +1825,6 @@ function rejectVisitorRequest(visitorId, adminId, rejectionReason, callback) {
     con.query(sql, [adminId, rejectionReason, visitorId], callback);
 }
 
-// Get approved visitors ready for check-in (Security/Admin view)
 function getApprovedVisitors(callback) {
     const sql = 'CALL GetApprovedVisitors()';
     con.query(sql, (err, results) => {
@@ -1798,7 +1836,6 @@ function getApprovedVisitors(callback) {
     });
 }
 
-// Check-in visitor (Security/Admin - after approval)
 function checkinVisitor(visitorId, callback) {
     const sql = `
         UPDATE visitors 
@@ -1811,18 +1848,6 @@ function checkinVisitor(visitorId, callback) {
     con.query(sql, [visitorId], callback);
 }
 
-// Checkout visitor (Security/Admin/Employee)
-function checkoutVisitor(visitorId, callback) {
-    const sql = `
-        UPDATE visitors 
-        SET exit_time = NOW(), 
-            visitor_status = 'Exited' 
-        WHERE visitor_id = ? AND visitor_status = 'Inside'
-    `;
-    con.query(sql, [visitorId], callback);
-}
-
-// Get current visitors inside
 function getCurrentVisitorsInside(callback) {
     const sql = 'CALL GetCurrentVisitorsInside()';
     con.query(sql, (err, results) => {
@@ -1834,7 +1859,6 @@ function getCurrentVisitorsInside(callback) {
     });
 }
 
-// Get my visitor requests (Owner/Tenant view)
 function getMyVisitorRequests(userType, userId, callback) {
     const sql = 'CALL GetMyVisitorRequests(?, ?)';
     con.query(sql, [userType, userId], (err, results) => {
@@ -1846,64 +1870,6 @@ function getMyVisitorRequests(userType, userId, callback) {
     });
 }
 
-// Get all visitors (Admin view)
-function getAllVisitors(callback) {
-    const sql = `
-        SELECT 
-            v.*,
-            r.type as room_type,
-            r.floor,
-            b.block_name,
-            CASE 
-                WHEN v.requested_by = 'owner' THEN o.name
-                WHEN v.requested_by = 'tenant' THEN t.name
-                ELSE 'Unknown'
-            END as requester_name,
-            CASE 
-                WHEN v.approved_by IS NOT NULL THEN ba.admin_name
-                ELSE NULL
-            END as approved_by_name,
-            CASE 
-                WHEN v.exit_time IS NOT NULL THEN TIMESTAMPDIFF(MINUTE, v.entry_time, v.exit_time)
-                WHEN v.visitor_status = 'Inside' THEN TIMESTAMPDIFF(MINUTE, v.entry_time, NOW())
-                ELSE NULL
-            END as duration_minutes
-        FROM visitors v
-        INNER JOIN room r ON v.apartment_no = r.room_no
-        INNER JOIN block b ON r.block_no = b.block_no
-        LEFT JOIN owner o ON v.requester_id = o.owner_id AND v.requested_by = 'owner'
-        LEFT JOIN tenant t ON v.requester_id = t.tenant_id AND v.requested_by = 'tenant'
-        LEFT JOIN block_admin ba ON v.approved_by = ba.admin_id
-        ORDER BY v.created_at DESC
-    `;
-    con.query(sql, callback);
-}
-
-// Get visitors by apartment
-function getVisitorsByApartment(apartmentNo, callback) {
-    const sql = `
-        SELECT 
-            v.*,
-            CASE 
-                WHEN v.requested_by = 'owner' THEN o.name
-                WHEN v.requested_by = 'tenant' THEN t.name
-                ELSE 'Unknown'
-            END as requester_name,
-            CASE 
-                WHEN v.exit_time IS NOT NULL THEN TIMESTAMPDIFF(MINUTE, v.entry_time, v.exit_time)
-                WHEN v.visitor_status = 'Inside' THEN TIMESTAMPDIFF(MINUTE, v.entry_time, NOW())
-                ELSE NULL
-            END as duration_minutes
-        FROM visitors v
-        LEFT JOIN owner o ON v.requester_id = o.owner_id AND v.requested_by = 'owner'
-        LEFT JOIN tenant t ON v.requester_id = t.tenant_id AND v.requested_by = 'tenant'
-        WHERE v.apartment_no = ?
-        ORDER BY v.created_at DESC
-    `;
-    con.query(sql, [apartmentNo], callback);
-}
-
-// Update visitor request (before approval)
 function updateVisitorRequest(visitorId, values, callback) {
     const [visitorName, apartmentNo, purpose, contactNumber, idProofType, idProofNumber, entryTime] = values;
     
@@ -1917,19 +1883,16 @@ function updateVisitorRequest(visitorId, values, callback) {
     con.query(sql, [...values, visitorId], callback);
 }
 
-// Delete visitor request (only if not approved)
 function deleteVisitorRequest(visitorId, callback) {
     const sql = "DELETE FROM visitors WHERE visitor_id = ? AND approval_status = 'Pending'";
     con.query(sql, [visitorId], callback);
 }
 
-// Get visitor approval statistics
 function getVisitorApprovalStats(callback) {
     const sql = 'SELECT * FROM visitor_approval_stats';
     con.query(sql, callback);
 }
 
-// Cancel visitor request (by requester, only if pending)
 function cancelVisitorRequest(visitorId, requesterId, callback) {
     const sql = `
         UPDATE visitors 
@@ -1942,12 +1905,11 @@ function cancelVisitorRequest(visitorId, requesterId, callback) {
     con.query(sql, [visitorId, requesterId], callback);
 }
 
-
-
 // ============= EXPORTS =============
 module.exports = {
-    // Connection
+    // Connection & Views
     connect,
+    createRequiredViews,
     
     // Authentication
     authoriseuser,
@@ -2075,6 +2037,7 @@ module.exports = {
     // Bulk Operations
     bulkUpdateComplaintStatus,
     bulkPayMaintenance,
+    
     // Lease Agreements
     createLeaseAgreement,
     getAllLeaseAgreements,
@@ -2100,18 +2063,16 @@ module.exports = {
     deleteVisitor,
     getApartmentVisitorCount,
     getVisitorStatistics,
-
+    
+    // Visitors with Approval Workflow
     requestVisitor,
     getPendingVisitorRequests,
     approveVisitorRequest,
     rejectVisitorRequest,
     getApprovedVisitors,
     checkinVisitor,
-    checkoutVisitor,
     getCurrentVisitorsInside,
     getMyVisitorRequests,
-    getAllVisitors,
-    getVisitorsByApartment,
     updateVisitorRequest,
     deleteVisitorRequest,
     getVisitorApprovalStats,
