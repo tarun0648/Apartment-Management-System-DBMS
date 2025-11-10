@@ -134,9 +134,3 @@ You can now access the application in your browser.
 ---
 
 
-
-npm install mysql2
-
-npm install --legacy-peer-deps
-
-npm run start
